@@ -57,7 +57,7 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <p class="mu">Ábrelos desde WhatsApp ("Compartir" → BancoPro) o elígelos aquí. Se validan al momento, sin internet.</p>
 <input type="file" id="fi" multiple><div id="res_import"></div></div>
 <div class="card"><b>Ficheros cargados</b>
-<p class="mu">Lista de todos los ficheros guardados en este teléfono. Puedes ver su contenido o eliminar un fichero cargado.</p>
+<p class="mu">Se muestran los 100 ficheros más recientes. Los históricos siguen guardados y se usan para el cuadre; abrir esta pantalla nunca recorre toda la tabla.</p>
 <div id="imp_list"></div></div>
 </section>
 <div id="file_view" class="card hide" style="position:fixed;z-index:20;left:10px;right:10px;top:10px;bottom:10px;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)">
@@ -71,14 +71,14 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <select id="c_com"></select>
 <input id="c_fec" type="date"><input id="c_cod" placeholder="Código (12 caracteres o 12 dígitos)" autocapitalize="characters">
 <button class="b" id="c_add">Guardar código</button><div id="c_msg" class="mu"></div></div>
-<div class="card"><b>Códigos registrados</b><div class="tbl" id="c_list"></div></div></section>
+<div class="card"><b>Códigos registrados</b><p class="mu">Se muestran los 100 códigos más recientes. El historial completo sigue guardado.</p><div class="tbl" id="c_list"></div></div></section>
 
 <section id="res" class="hide"><div class="card"><b>Resultado del sorteo</b>
 <p class="mu">Centena (3) + corrido 1 (2) + corrido 2 (2), sin espacios. Ej: 8432517.</p>
 <input id="r_fec" type="date"><select id="r_lot"></select><select id="r_sor"></select>
 <input id="r_num" inputmode="numeric" placeholder="Número ganador"><div id="r_hint" class="mu"></div>
 <button class="b" id="r_add">Guardar resultado</button></div>
-<div class="card"><b>Resultados guardados</b><div class="tbl" id="r_list"></div></div></section>
+<div class="card"><b>Resultados guardados</b><p class="mu">Se muestran los 100 resultados más recientes. El historial completo sigue guardado.</p><div class="tbl" id="r_list"></div></div></section>
 
 <section id="cua" class="hide">
 <div class="card">
@@ -135,7 +135,7 @@ const DEFAULT_API = "https://www.lotfast.x10.mx/licencias/api.php";
 
 /* ---------- IndexedDB ---------- */
 let DB;
-const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",6);
+const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",7);
  r.onupgradeneeded=()=>{const d=r.result,n=d.objectStoreNames;
   if(!n.contains("archivos"))d.createObjectStore("archivos",{keyPath:"nonce"});
   if(!n.contains("codigos"))d.createObjectStore("codigos",{keyPath:"id",autoIncrement:true});
@@ -150,6 +150,7 @@ const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",6);
 const tx=(s,m="readonly")=>DB.transaction(s,m).objectStore(s);
 const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const all=s=>rq(tx(s).getAll()),get=(s,k)=>rq(tx(s).get(k)),put=(s,v)=>rq(tx(s,"readwrite").put(v)),del=(s,k)=>rq(tx(s,"readwrite").delete(k));
+function countIndex(store,index,range=null){return new Promise((resolve,reject)=>{const t=DB.transaction(store,"readonly"),s=t.objectStore(store),req=s.index(index).count(range);req.onsuccess=()=>resolve(req.result||0);req.onerror=()=>reject(req.error)})}
 function cursorIndex(store,index,range,limit=100,dir="prev"){
  const db=DB;return new Promise((resolve,reject)=>{const t=db.transaction(store,"readonly"),s=t.objectStore(store),idx=s.index(index),out=[];
   const req=idx.openCursor(range??null,dir);
@@ -270,14 +271,14 @@ async function registrarAuditoria(r,nombre,texto){
   hash_archivo:hashArchivo,hash_declarado:h.hash_contenido??"",hash_calculado:hashContenido,
   codigo_declarado:h.codigo_verificacion??"",codigo_calculado:hashContenido?hashContenido.slice(0,12).toUpperCase():"",
   codigo_telefonico_declarado:h.codigo_telefonico??"",codigo_telefonico_calculado:sigTel,
-  firma:h.firma??"",errores:[...(r.errores||[])],avisos:[...(r.avisos||[])],contenido:texto
+  firma:h.firma??"",errores:[...(r.errores||[])],avisos:[...(r.avisos||[])],contenido:r.estado==="er"?texto:""
  };
  await put("auditoria",rec);
  return rec;
 }
 function estadoAud(e){return e==="er"?["er","Rechazado"]:e==="du"?["wa","Duplicado"]:e==="wa"?["wa","Aceptado con avisos"]:["ok","Aceptado"]}
 async function leerAuditoriaRecientes(limite=50){
- const db=await dbp();
+ const db=DB;
  return new Promise((resolve,reject)=>{
   const tx=db.transaction("auditoria","readonly"),s=tx.objectStore("auditoria"),out=[];
   const req=s.indexNames.contains("intento")?s.index("intento").openCursor(null,"prev"):s.openCursor(null,"prev");
@@ -291,7 +292,7 @@ async function listaAuditoria(){
  const v=filtro==="todos"?l:l.filter(a=>a.estado===filtro);
  const res=document.getElementById("aud_resumen"),box=document.getElementById("aud_list");
  const rechazados=l.filter(a=>a.estado==="er").length,aceptados=l.filter(a=>a.estado==="ok"||a.estado==="wa").length,duplicados=l.filter(a=>a.estado==="du").length;
- res.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag er">Rechazados recientes: '+rechazados+'</span><span class="tag ok">Aceptados recientes: '+aceptados+'</span><span class="tag wa">Duplicados recientes: '+duplicados+'</span><span class="mu" style="padding:3px 0">Mostrando los últimos '+l.length+' intentos</span></div>';
+ res.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag er">Rechazados recientes: '+rechazados+'</span><span class="tag ok">Aceptados recientes: '+aceptados+'</span><span class="tag wa">Duplicados recientes: '+duplicados+'</span><span class="mu" style="padding:3px 0">Mostrando los últimos '+l.length+' intentos (máximo 50)</span></div>';
  if(!v.length){box.innerHTML='<p class="mu">No hay registros de auditoría recientes.</p>';return}
  box.innerHTML=v.map(a=>{
   const e=estadoAud(a.estado),mot=[...(a.errores||[]),...(a.avisos||[])],hora=a.intento?new Date(a.intento).toLocaleString():"—";
@@ -733,14 +734,24 @@ async function pintarCuadreComercial(){
 a_save.onclick=async()=>{await put("cfg",{k:"api_url",v:a_url.value.trim()||DEFAULT_API});alert("Guardado")};
 
 /* ---------- Navegación ---------- */
-function show(t){document.querySelectorAll("main > section").forEach(s=>s.classList.toggle("hide",s.id!==t));
+async function show(t){document.querySelectorAll("main > section").forEach(s=>s.classList.toggle("hide",s.id!==t));
  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
- if(t==="aud")listaAuditoria();if(t==="cua")cuadre()}
-document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.t));
+ if(t==="imp")await listaArchivos();
+ else if(t==="cod")await listaCodigos();
+ else if(t==="res")await listaResultados();
+ else if(t==="cua")await cuadre();
+ else if(t==="aud")await listaAuditoria();
+}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{void show(b.dataset.t)});
 
 async function refrescar(){
- await pintarSesion();await pintarComerciales();await listaArchivos();await listaCodigos();await listaResultados();
- if(document.getElementById("cua")&&!document.getElementById("cua").classList.contains("hide"))await cuadre();
+ await pintarSesion();await pintarComerciales();
+ const activo=document.querySelector("nav button.on")?.dataset.t;
+ if(activo==="imp")await listaArchivos();
+ else if(activo==="cod")await listaCodigos();
+ else if(activo==="res")await listaResultados();
+ else if(activo==="cua")await cuadre();
+ else if(activo==="aud")await listaAuditoria();
 }
 openDB().then(async()=>{
  a_url.value=await apiUrl();
