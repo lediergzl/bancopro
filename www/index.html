@@ -22,6 +22,7 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 .file-main{min-width:0;flex:1}.file-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .file-actions{display:flex;gap:6px;flex:0 0 auto}.file-actions button{width:auto;margin:0;padding:7px 9px}
 .file-content{white-space:pre-wrap;word-break:break-word;max-height:60vh;overflow:auto;background:var(--bg);border:1px solid var(--bd);border-radius:9px;padding:10px;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
+.faltantes-date{margin:0 0 12px}.faltantes-date-title{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;padding:2px 0 8px}.faltantes-date-count{font-size:12px;color:var(--mu);font-weight:500}.faltantes-com{border:1px solid var(--bd);border-radius:10px;margin:8px 0;overflow:hidden;background:var(--card)}.faltantes-com summary{list-style:none;cursor:pointer;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:650}.faltantes-com summary::-webkit-details-marker{display:none}.faltantes-com summary:before{content:"›";font-size:20px;line-height:12px;color:var(--mu);transition:transform .15s}.faltantes-com[open] summary:before{transform:rotate(90deg)}.faltantes-com-main{min-width:0;flex:1}.faltantes-com-name{display:block}.faltantes-com-meta{display:block;margin-top:2px}.faltantes-badge{display:inline-block;padding:3px 7px;border-radius:99px;background:color-mix(in srgb,var(--er) 12%,transparent);color:var(--er);font-size:11px;font-weight:700;white-space:nowrap}.faltantes-detail{padding:0 12px 10px}.faltantes-lot{padding:7px 0;border-top:1px solid var(--bd)}.faltantes-lot:first-child{border-top:0}.faltantes-lot-name{font-weight:600}.faltantes-sorteos{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}.faltantes-sorteo{padding:3px 7px;border:1px solid var(--bd);border-radius:7px;font-size:12px}.faltantes-codigo{margin-bottom:12px}.faltantes-empty{padding:8px 0}.faltantes-section-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 </style></head><body>
 <header>BancoPro <span class="mu">· todo se procesa en el teléfono</span></header>
 <nav>
@@ -423,11 +424,26 @@ async function cuadre(){
 async function pintarFaltantes(desde,hasta){
  const bd=await bundle(),fec=q_fec.value;
  const pen=(await all("codigos")).filter(c=>c.estado==="pendiente"&&(_modoRango?enRango(c.fecha,desde,hasta):(!fec||c.fecha===fec)));
- q_faltan_cod.innerHTML=pen.length?"<b class=\"wa\">Con código, sin archivo:</b><table>"+pen.map(c=>{
-  const nombre=comercialPorId(bd,+c.comercial)?.nombre||c.comercial;
-  return `<tr><td>${esc(nombre)}</td><td>${esc(c.fecha)}</td><td>${esc(c.codigo)}</td><td class="mu">hace ${Math.round((Date.now()-new Date(c.recibido))/60000)} min</td></tr>`}).join("")+"</table>":"";
+ const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id||"—";
 
- if(!bd||!bd.comerciales?.length||!bd.sorteos?.length){q_faltan_nada.innerHTML=pen.length?"":'<p class="mu">Nada pendiente.</p>';return}
+ /* Códigos pendientes: también agrupados por fecha y comercial. */
+ const pc={};
+ for(const c of pen){
+  const k=[c.fecha,c.comercial].join("|");
+  (pc[k]??={fecha:c.fecha,comercial:c.comercial,nombre:nombreCom(c.comercial),items:[]}).items.push(c);
+ }
+ const pdates={};
+ for(const x of Object.values(pc))(pdates[x.fecha]??=[]).push(x);
+ const pdateKeys=Object.keys(pdates).sort().reverse();
+ q_faltan_cod.innerHTML=pdateKeys.length?'<div class="faltantes-codigo"><div class="faltantes-section-title"><b class="wa">Con código, sin archivo</b><span class="faltantes-date-count">'+pen.length+' pendiente'+(pen.length===1?"":"s")+'</span></div>'+
+  pdateKeys.map(fecha=>`<div class="faltantes-date"><div class="faltantes-date-title"><span>${esc(fecha)}</span><span class="faltantes-date-count">${pdates[fecha].reduce((n,x)=>n+x.items.length,0)} pendiente(s)</span></div>`+
+   pdates[fecha].sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(x=>`<details class="faltantes-com"><summary><span class="faltantes-com-main"><span class="faltantes-com-name">${esc(x.nombre)}</span><span class="mu faltantes-com-meta">${x.items.length} fichero${x.items.length===1?"":"s"} esperado${x.items.length===1?"":"s"}</span></span><span class="faltantes-badge">${x.items.length}</span></summary><div class="faltantes-detail">`+
+    x.items.sort((a,b)=>String(a.codigo).localeCompare(String(b.codigo))).map(c=>`<div class="faltantes-lot"><span class="faltantes-lot-name">Código</span><span class="mu"> · ${esc(c.codigo)} · hace ${Math.max(0,Math.round((Date.now()-new Date(c.recibido))/60000))} min</span></div>`).join("")+
+   `</div></details>`).join("")+`</div>`).join("")+'</div>':"";
+
+ if(!bd||!bd.comerciales?.length||!bd.sorteos?.length){
+  q_faltan_nada.innerHTML=pen.length?"":'<p class="mu faltantes-empty">Nada pendiente.</p>';return
+ }
  const hoy=new Date().toISOString().slice(0,10),ahora=Date.now();
  const dias=_modoRango?diasEntre(desde,hasta):[fec].filter(Boolean);
  const arch=await all("archivos");
@@ -435,24 +451,40 @@ async function pintarFaltantes(desde,hasta){
  const yaAvisoCodigo=new Set(pen.map(c=>[c.comercial,c.fecha].join("|")));
  const faltan=[];
  for(const fecha of dias){
-  if(fecha>hoy)continue; // sorteos de un día futuro, todavía no aplica
+  if(fecha>hoy)continue;
   for(const com of (bd.comerciales||[]).filter(c=>c.activo)){
    for(const sor of (bd.sorteos||[])){
-    if(fecha===hoy){ // hoy: solo lo que ya cerró
+    if(fecha===hoy){
      if(!sor.hora_cierre)continue;
      const cierre=new Date(fecha+"T"+sor.hora_cierre);
      if(isNaN(cierre)||cierre.getTime()>ahora)continue;
     }
     if(yaTiene(com.id,fecha,sor.loteria_id,sor.id))continue;
-    if(yaAvisoCodigo.has([com.id,fecha].join("|")))continue; // ya cuenta arriba como "con código"
+    if(yaAvisoCodigo.has([com.id,fecha].join("|")))continue;
     const lotNombre=(bd.loterias||[]).find(l=>String(l.id)===String(sor.loteria_id))?.nombre||("Lot "+sor.loteria_id);
-    faltan.push({com:com.nombre,fecha,txt:`${lotNombre} ${sor.horario||sor.nombre||""}`.trim()});
+    faltan.push({com:com.nombre,fecha,lot:lotNombre,sor:sor.horario||sor.nombre||""});
    }
   }
  }
- q_faltan_nada.innerHTML=faltan.length?
-  '<b class="er">Sin código ni archivo:</b><table>'+faltan.map(f=>`<tr><td>${esc(f.com)}</td><td>${esc(f.fecha)}</td><td>${esc(f.txt)}</td></tr>`).join("")+"</table>"
-  :(pen.length?"":'<p class="mu">Nada pendiente: todos los sorteos vencidos ya tienen archivo o código.</p>');
+
+ /* Sin código ni archivo: fecha -> comercial -> lotería -> sorteos. */
+ const fc={};
+ for(const f of faltan){
+  const k=[f.fecha,f.com].join("|");
+  const g=(fc[k]??={fecha:f.fecha,com:f.com,lots:{}});
+  (g.lots[f.lot]??=[]).push(f.sor);
+ }
+ const fdates={};
+ for(const x of Object.values(fc))(fdates[x.fecha]??=[]).push(x);
+ const fdateKeys=Object.keys(fdates).sort().reverse();
+ q_faltan_nada.innerHTML=fdateKeys.length?
+  '<div class="faltantes-section-title"><b class="er">Sin código ni archivo</b><span class="faltantes-date-count">'+faltan.length+' faltante'+(faltan.length===1?"":"s")+'</span></div>'+
+  fdateKeys.map(fecha=>`<div class="faltantes-date"><div class="faltantes-date-title"><span>${esc(fecha)}</span><span class="faltantes-date-count">${fdates[fecha].reduce((n,x)=>n+Object.values(x.lots).reduce((a,v)=>a+v.length,0),0)} faltante(s)</span></div>`+
+   fdates[fecha].sort((a,b)=>a.com.localeCompare(b.com)).map(x=>`<details class="faltantes-com"><summary><span class="faltantes-com-main"><span class="faltantes-com-name">${esc(x.com)}</span><span class="mu faltantes-com-meta">${Object.values(x.lots).reduce((n,v)=>n+v.length,0)} sorteos pendientes</span></span><span class="faltantes-badge">${Object.values(x.lots).reduce((n,v)=>n+v.length,0)}</span></summary><div class="faltantes-detail">`+
+    Object.entries(x.lots).sort((a,b)=>a[0].localeCompare(b[0])).map(([lot,sors])=>`<div class="faltantes-lot"><span class="faltantes-lot-name">${esc(lot)}</span><div class="faltantes-sorteos">${[...new Set(sors)].sort().map(s=>`<span class="faltantes-sorteo">${esc(s||"Sorteo")}</span>`).join("")}</div></div>`).join("")+
+   `</div></details>`).join("")+`</div>`).join("")+
+  '</div>'
+  :(pen.length?"":'<p class="mu faltantes-empty">Nada pendiente: todos los sorteos vencidos ya tienen archivo o código.</p>');
 }
 function diasEntre(desde,hasta){
  if(!desde||!hasta)return[];
