@@ -141,7 +141,8 @@ const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",5);
   if(!n.contains("codigos"))d.createObjectStore("codigos",{keyPath:"id",autoIncrement:true});
   if(!n.contains("resultados"))d.createObjectStore("resultados",{keyPath:"key"});
   if(!n.contains("cfg"))d.createObjectStore("cfg",{keyPath:"k"});
-  if(!n.contains("auditoria"))d.createObjectStore("auditoria",{keyPath:"id",autoIncrement:true});};
+  if(!n.contains("auditoria"))d.createObjectStore("auditoria",{keyPath:"id",autoIncrement:true});
+  if(n.contains("auditoria")){const s=d.transaction.objectStore("auditoria");if(!s.indexNames.contains("intento"))s.createIndex("intento","intento",{unique:false})}};
  r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)});
 const tx=(s,m="readonly")=>DB.transaction(s,m).objectStore(s);
 const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
@@ -249,13 +250,23 @@ async function registrarAuditoria(r,nombre,texto){
  return rec;
 }
 function estadoAud(e){return e==="er"?["er","Rechazado"]:e==="du"?["wa","Duplicado"]:e==="wa"?["wa","Aceptado con avisos"]:["ok","Aceptado"]}
+async function leerAuditoriaRecientes(limite=50){
+ const db=await dbp();
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction("auditoria","readonly"),s=tx.objectStore("auditoria"),out=[];
+  const req=s.indexNames.contains("intento")?s.index("intento").openCursor(null,"prev"):s.openCursor(null,"prev");
+  req.onsuccess=()=>{const cur=req.result;if(!cur||out.length>=limite){resolve(out);return}out.push(cur.value);cur.continue()};
+  req.onerror=()=>reject(req.error);
+ });
+}
 async function listaAuditoria(){
- const l=(await all("auditoria")).sort((a,b)=>String(b.intento).localeCompare(String(a.intento)));
- const filtro=document.getElementById("aud_filtro")?.value||"todos",v=filtro==="todos"?l:l.filter(a=>a.estado===filtro);
+ const filtro=document.getElementById("aud_filtro")?.value||"todos";
+ const l=await leerAuditoriaRecientes(50);
+ const v=filtro==="todos"?l:l.filter(a=>a.estado===filtro);
  const res=document.getElementById("aud_resumen"),box=document.getElementById("aud_list");
  const rechazados=l.filter(a=>a.estado==="er").length,aceptados=l.filter(a=>a.estado==="ok"||a.estado==="wa").length,duplicados=l.filter(a=>a.estado==="du").length;
- res.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag er">Rechazados: '+rechazados+'</span><span class="tag ok">Aceptados: '+aceptados+'</span><span class="tag wa">Duplicados: '+duplicados+'</span><span class="mu" style="padding:3px 0">Intentos totales: '+l.length+'</span></div>';
- if(!v.length){box.innerHTML='<p class="mu">No hay registros de auditoría.</p>';return}
+ res.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag er">Rechazados recientes: '+rechazados+'</span><span class="tag ok">Aceptados recientes: '+aceptados+'</span><span class="tag wa">Duplicados recientes: '+duplicados+'</span><span class="mu" style="padding:3px 0">Mostrando los últimos '+l.length+' intentos</span></div>';
+ if(!v.length){box.innerHTML='<p class="mu">No hay registros de auditoría recientes.</p>';return}
  box.innerHTML=v.map(a=>{
   const e=estadoAud(a.estado),mot=[...(a.errores||[]),...(a.avisos||[])],hora=a.intento?new Date(a.intento).toLocaleString():"—";
   return '<details class="file-group"><summary><span class="file-group-main"><span class="file-group-title">'+esc(a.resultado)+' · '+esc(a.nombre||"Fichero sin nombre")+'</span><span class="mu file-group-meta">'+esc(a.comercial_nombre||a.comercial||"Comercial desconocido")+' · '+esc(a.fecha_sorteo||"sin fecha")+' · '+esc(hora)+'</span></span><span class="tag '+e[0]+'">'+e[1]+'</span></summary><div class="faltantes-detail">'+
@@ -700,7 +711,8 @@ a_save.onclick=async()=>{await put("cfg",{k:"api_url",v:a_url.value.trim()||DEFA
 
 /* ---------- Navegación ---------- */
 function show(t){document.querySelectorAll("main > section").forEach(s=>s.classList.toggle("hide",s.id!==t));
- document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===t))}
+ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
+ if(t==="aud")listaAuditoria()}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 async function refrescar(){
