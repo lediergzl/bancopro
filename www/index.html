@@ -55,7 +55,7 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <section id="imp" class="hide">
 <div class="card"><b>Importar archivos .jgd</b>
 <p class="mu">Ábrelos desde WhatsApp ("Compartir" → BancoPro) o elígelos aquí. Se validan al momento, sin internet.</p>
-<input type="file" id="fi" multiple><div id="res"></div></div>
+<input type="file" id="fi" multiple><div id="res_import"></div></div>
 <div class="card"><b>Ficheros cargados</b>
 <p class="mu">Lista de todos los ficheros guardados en este teléfono. Puedes ver su contenido o eliminar un fichero cargado.</p>
 <div id="imp_list"></div></div>
@@ -225,7 +225,7 @@ function pintarRes(r){
  d.innerHTML=`<span class="tag ${c[0]}">${c[1]}</span> <b>${esc(r.nombre)}</b>`+
   (r.h?`<div class="mu">Comercial ${esc(r.h.comercial_id)} · ${esc(r.h.fecha_sorteo)} · ${r.reg?r.reg.jugadas+" jugadas · "+money(r.reg.monto):""}</div>`:"")+
   [...r.errores.map(e=>`<div class="er">✖ ${esc(e)}</div>`),...r.avisos.map(e=>`<div class="wa">• ${esc(e)}</div>`)].join("");
- document.getElementById("res").prepend(d)}
+ document.getElementById("res_import").prepend(d)}
 document.getElementById("fi").onchange=async e=>{for(const f of e.target.files)await importar(f.name,await f.text());e.target.value=""};
 
 /* ---------- Sesión / login (única llamada de red, para traer la configuración) ---------- */
@@ -298,44 +298,46 @@ async function listaArchivos(){
  if(!l.length){box.innerHTML='<p class="mu">No hay ficheros cargados.</p>';return}
  const estado={ok:["ok","Válido"],wa:["wa","Con avisos"],er:["er","Rechazado"],du:["wa","Duplicado"]};
  const fechas={};
- for(const a of l){
-  const fecha=a.fecha||"—";
-  (fechas[fecha]??=[]).push(a);
- }
+ for(const a of l){const fecha=a.fecha||"—";(fechas[fecha]??=[]).push(a)}
  const fechaKeys=Object.keys(fechas).sort((a,b)=>b.localeCompare(a));
- box.innerHTML=fechaKeys.map(fecha=>{
-  const files=fechas[fecha];
-  const comerciales={};
+ let html="";
+ for(const fecha of fechaKeys){
+  const files=fechas[fecha], comerciales={};
   for(const a of files){
    const id=String(a.comercial_num??a.comercial??"");
-   (comerciales[id]??={id,nombre:nombreCom(a.comercial_num||a.comercial),files:[]}).files.push(a);
+   (comerciales[id]??={nombre:nombreCom(a.comercial_num||a.comercial),files:[]}).files.push(a);
   }
   const grupos=Object.values(comerciales).sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  return `<details class="file-group">
-   <summary><span class="file-group-main"><span class="file-group-title">📅 ${esc(fecha)}</span><span class="mu file-group-meta">${files.length} fichero${files.length===1?"":"s"} · ${grupos.length} comercial${grupos.length===1?"":"es"}</span></span><span class="file-badge">${files.length}</span></summary>
-   <div class="faltantes-detail">${grupos.map(g=>{
-    const porLoteria={};
-    for(const a of g.files){
-     const lot=String(a.loteria??"");
-     (porLoteria[lot]??=[]).push(a);
+  html+='<details class="file-group">';
+  html+='<summary><span class="file-group-main"><span class="file-group-title">📅 '+esc(fecha)+'</span><span class="mu file-group-meta">'+files.length+' fichero'+(files.length===1?"":"s")+' · '+grupos.length+' comercial'+(grupos.length===1?"":"es")+'</span></span><span class="file-badge">'+files.length+'</span></summary>';
+  html+='<div class="faltantes-detail">';
+  for(const g of grupos){
+   const porLoteria={};
+   for(const a of g.files){const lot=String(a.loteria??"");(porLoteria[lot]??=[]).push(a)}
+   html+='<details class="file-group">';
+   html+='<summary><span class="file-group-main"><span class="file-group-title">'+esc(g.nombre)+'</span><span class="mu file-group-meta">'+g.files.length+' fichero'+(g.files.length===1?"":"s")+'</span></span><span class="file-badge">'+g.files.length+'</span></summary>';
+   html+='<div class="faltantes-detail">';
+   const lots=Object.values(porLoteria).sort((a,b)=>nombreLot(a[0].loteria).localeCompare(nombreLot(b[0].loteria)));
+   for(const fs of lots){
+    fs.sort((a,b)=>String(a.sorteo).localeCompare(String(b.sorteo)));
+    for(const a of fs){
+     const e=estado[a.estado]||["wa",a.estado||"—"];
+     html+='<div class="file-item"><div class="file-item-head"><div class="file-name" title="'+esc(a.nombre||a.nonce)+'">'+esc(a.nombre||a.nonce||"Fichero sin nombre")+'</div><span class="tag '+e[0]+'">'+e[1]+'</span></div>';
+     html+='<div class="mu file-meta">'+esc(nombreLot(a.loteria))+' · '+esc(nombreSor(a.sorteo))+' · '+(a.jugadas||0)+' jugadas · '+money(a.monto||0)+'</div>';
+     html+='<div class="file-actions"><button class="b" data-view-file="'+esc(a.nonce)+'">Ver contenido</button><button class="b" data-delete-file="'+esc(a.nonce)+'" style="background:var(--er)">Borrar</button></div></div>';
     }
-    return `<details class="file-group">
-     <summary><span class="file-group-main"><span class="file-group-title">${esc(g.nombre)}</span><span class="mu file-group-meta">${g.files.length} fichero${g.files.length===1?"":"s"}</span></span><span class="file-badge">${g.files.length}</span></summary>
-     <div class="faltantes-detail">${Object.values(porLoteria).sort((a,b)=>nombreLot(a[0].loteria).localeCompare(nombreLot(b[0].loteria))).map(fs=>{
-      return fs.slice().sort((a,b)=>String(a.sorteo).localeCompare(String(b.sorteo))).map(a=>{
-       const e=estado[a.estado]||["wa",a.estado||"—"];
-       return `<div class="file-item"><div class="file-item-head"><div class="file-name" title="${esc(a.nombre||a.nonce)}">${esc(a.nombre||a.nonce||"Fichero sin nombre")}</div><span class="tag ${e[0]}">${e[1]}</span></div><div class="mu file-meta">${esc(nombreLot(a.loteria))} · ${esc(nombreSor(a.sorteo))} · ${a.jugadas||0} jugadas · ${money(a.monto||0)}</div><div class="file-actions"><button class="b" data-view-file="${esc(a.nonce)}">Ver contenido</button><button class="b" data-delete-file="${esc(a.nonce)}" style="background:var(--er)">Borrar</button></div></div>`;
-      }).join("");
-     }).join("")}</div></details>`;
-   }).join("")}</div></details>`;
-  }).join("")}</div>`;
- }).join("");
+   }
+   html+='</div></details>';
+  }
+  html+='</div></details>';
+ }
+ box.innerHTML=html;
  box.querySelectorAll("[data-view-file]").forEach(btn=>btn.onclick=async()=>{
   const a=await get("archivos",btn.dataset.viewFile);if(!a)return;
   document.getElementById("file_view_title").textContent=a.nombre||"Contenido del fichero";
-  document.getElementById("file_view_info").textContent=`${nombreCom(a.comercial_num||a.comercial)} · ${a.fecha||"—"} · nonce ${a.nonce||"—"}`;
+  document.getElementById("file_view_info").textContent=nombreCom(a.comercial_num||a.comercial)+" · "+(a.fecha||"—")+" · nonce "+(a.nonce||"—");
   let contenido=a.contenido;
-  if(!contenido) contenido=JSON.stringify({header:{comercial_id:a.comercial,fecha_sorteo:a.fecha,codigo_verificacion:a.codigo,codigo_telefonico:a.tel,nonce:a.nonce,fecha_generacion:a.generado},resumen:{total_jugadas:a.jugadas,total_monto:a.monto},jugadas:a.jug||[]},null,2);
+  if(!contenido)contenido=JSON.stringify({header:{comercial_id:a.comercial,fecha_sorteo:a.fecha,codigo_verificacion:a.codigo,codigo_telefonico:a.tel,nonce:a.nonce,fecha_generacion:a.generado},resumen:{total_jugadas:a.jugadas,total_monto:a.monto},jugadas:a.jug||[]},null,2);
   try{const parsed=typeof contenido==="string"?JSON.parse(contenido):contenido;document.getElementById("file_view_content").textContent=JSON.stringify(parsed,null,2)}
   catch{document.getElementById("file_view_content").textContent=String(contenido||"Sin contenido disponible.")}
   document.getElementById("file_view").classList.remove("hide");
@@ -343,7 +345,7 @@ async function listaArchivos(){
  box.querySelectorAll("[data-delete-file]").forEach(btn=>btn.onclick=async()=>{
   const a=await get("archivos",btn.dataset.deleteFile);if(!a)return;
   const nombre=a.nombre||a.nonce||"este fichero";
-  if(!confirm(`¿Eliminar el fichero cargado "${nombre}"?\\n\\nSe quitará de BancoPro y dejará de participar en el cuadre. El código registrado no se borra.`))return;
+  if(!confirm("¿Eliminar el fichero cargado \""+nombre+"\"?\\n\\nSe quitará de BancoPro y dejará de participar en el cuadre. El código registrado no se borra."))return;
   await del("archivos",a.nonce);await refrescar();show("imp");
  });
 }
