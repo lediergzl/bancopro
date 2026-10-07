@@ -142,7 +142,7 @@ const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",6);
   if(!n.contains("resultados"))d.createObjectStore("resultados",{keyPath:"key"});
   if(!n.contains("cfg"))d.createObjectStore("cfg",{keyPath:"k"});
   if(!n.contains("auditoria"))d.createObjectStore("auditoria",{keyPath:"id",autoIncrement:true});
-  if(n.contains("archivos")){const s=d.transaction.objectStore("archivos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("importado"))s.createIndex("importado","importado",{unique:false});if(!s.indexNames.contains("comercial_fecha"))s.createIndex("comercial_fecha",["comercial_num","fecha"],{unique:false})}
+  if(n.contains("archivos")){const s=d.transaction.objectStore("archivos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("estado"))s.createIndex("estado","estado",{unique:false});if(!s.indexNames.contains("importado"))s.createIndex("importado","importado",{unique:false});if(!s.indexNames.contains("comercial_fecha"))s.createIndex("comercial_fecha",["comercial_num","fecha"],{unique:false})}
   if(n.contains("codigos")){const s=d.transaction.objectStore("codigos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("recibido"))s.createIndex("recibido","recibido",{unique:false});if(!s.indexNames.contains("estado_fecha"))s.createIndex("estado_fecha",["estado","fecha"],{unique:false})}
   if(n.contains("resultados")){const s=d.transaction.objectStore("resultados");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false})}
   if(n.contains("auditoria")){const s=d.transaction.objectStore("auditoria");if(!s.indexNames.contains("intento"))s.createIndex("intento","intento",{unique:false})}};
@@ -167,6 +167,11 @@ async function rangoComercialArchivos(com,fecha){
  if(com==null)return [];
  if(fecha)return cursorIndex("archivos","comercial_fecha",IDBKeyRange.only([+com,fecha]),Number.MAX_SAFE_INTEGER,"next");
  return cursorIndex("archivos","comercial_fecha",IDBKeyRange.bound([+com,"0000-01-01"],[+com,"9999-12-31"]),Number.MAX_SAFE_INTEGER,"next");
+}
+async function rangoCodigoComercial(com,fecha){
+ if(com==null||!fecha)return [];
+ return cursorIndex("codigos","estado_fecha",IDBKeyRange.bound(["alterado",fecha],["pendiente",fecha]),Number.MAX_SAFE_INTEGER,"next")
+   .then(a=>a.filter(c=>String(c.comercial)===String(com)));
 }
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>Number(n||0).toLocaleString("es",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -311,11 +316,11 @@ document.getElementById("aud_refrescar").onclick=listaAuditoria;
 async function importar(nombre,texto){
  const r=await validar(nombre,texto);
  if(r.reg && r.estado!=="er" && r.estado!=="du"){
-  const cods=(await all("codigos")).filter(c=>String(c.comercial)===String(r.reg.comercial_num)&&c.fecha===r.reg.fecha);
+  const cods=await rangoCodigoComercial(r.reg.comercial_num,r.reg.fecha);
   const m=cods.find(c=>c.estado!=="confirmado"&&[r.reg.codigo,r.reg.tel].includes(c.codigo));
   if(m){m.estado=r.reg.estado==="er"?"alterado":"confirmado";m.archivo=r.reg.nonce;m.confirmado=r.reg.importado;await put("codigos",m);r.avisos.push("Coincide con el código registrado ✔")}
   else if(cods.some(c=>c.estado==="pendiente")){r.avisos.push("Hay códigos pendientes de este comercial/fecha y ninguno coincide");if(r.reg.estado==="ok")r.reg.estado="wa"}
-  await put("archivos",{...r.reg,nombre,contenido:texto});
+  await put("archivos",{...r.reg,nombre,jug:r.reg.jug});
  }
  await registrarAuditoria(r,nombre,texto);
  pintarRes(r);await refrescar();return r}
@@ -341,7 +346,7 @@ async function pintarSesion(){
 }
 async function pintarPendientesResumen(){
  const bd=await bundle();
- const pend=(await all("codigos")).filter(c=>c.estado==="pendiente");
+ const pend=await cursorIndex("codigos","estado_fecha",IDBKeyRange.bound(["pendiente","0000-01-01"],["pendiente","9999-12-31"]),Number.MAX_SAFE_INTEGER,"next");
  const box=document.getElementById("ses_pendientes");
  if(!pend.length){box.innerHTML='<span class="ok">✔ No hay códigos esperando archivo.</span>';return}
  const masAntiguo=pend.reduce((a,b)=>a.fecha<b.fecha?a:b);
@@ -390,8 +395,8 @@ c_add.onclick=async()=>{
  await put("codigos",{comercial:com,fecha:fec,codigo:cod,estado:"pendiente",recibido:new Date().toISOString()});
  c_cod.value="";c_msg.textContent="Guardado "+new Date().toLocaleTimeString();await refrescar()};
 async function eliminarRechazadosGuardados(){
- const l=await all("archivos");
- for(const a of l)if(a.estado==="er"){
+ const l=await cursorIndex("archivos","estado",IDBKeyRange.only("er"),Number.MAX_SAFE_INTEGER,"next");
+ for(const a of l){
   if(a.contenido)await registrarAuditoria({estado:"er",errores:a.errores||[],avisos:a.avisos||[]},a.nombre||a.nonce,a.contenido);
   await del("archivos",a.nonce);
  }}
