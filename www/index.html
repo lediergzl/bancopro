@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>BancoPro</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--tx:#1b1f24;--mu:#6b7280;--ac:#0b6b4f;--ok:#0b7a3e;--er:#b42318;--wa:#b76e00;--bd:#e3e6ea}
+@media(prefers-color-scheme:dark){:root{--bg:#111418;--card:#1a1f26;--tx:#e8ebef;--mu:#98a1ad;--ac:#3ecf9a;--ok:#4ade80;--er:#f87171;--wa:#fbbf24;--bd:#2a313b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px system-ui,sans-serif;padding:env(safe-area-inset-top) 0 60px}
+header{padding:14px 16px;font-weight:700;font-size:18px}
+nav{display:flex;gap:6px;padding:0 12px 10px;overflow-x:auto}
+nav button{flex:1;padding:9px 10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;font:inherit;white-space:nowrap}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+main{padding:0 12px}.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:10px}
+input,select,button.b{font:inherit;padding:10px;border-radius:9px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);width:100%;margin:4px 0}
+button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(--mu);font-size:13px}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid currentColor}
+.ok{color:var(--ok)}.er{color:var(--er)}.wa{color:var(--wa)}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+.r{text-align:right}.hide{display:none}.banner{padding:8px 10px;border-radius:9px;font-size:13px;margin-bottom:8px}
+.banner.wa{background:color-mix(in srgb,var(--wa) 15%,transparent)}
+</style></head><body>
+<header>BancoPro <span class="mu">· todo se procesa en el teléfono</span></header>
+<nav>
+<button data-t="ses" class="on">Configuración</button><button data-t="imp">Importar</button>
+<button data-t="cod">Códigos</button><button data-t="res">Resultados</button>
+<button data-t="cua">Cuadre</button><button data-t="aju">Ajustes</button>
+</nav>
+<main>
+
+<section id="ses">
+<div class="banner wa">Internet solo hace falta aquí, para traer la configuración del banco. Importar, registrar códigos, poner resultados y ver el cuadre funciona siempre sin conexión.</div>
+<div class="card" id="ses_pendientes"></div>
+<div class="card" id="ses_logged"></div>
+<div class="card" id="ses_loginbox"><b>Iniciar sesión del banco</b>
+<input id="l_user" placeholder="Usuario" autocapitalize="none">
+<input id="l_pass" type="password" placeholder="Contraseña">
+<button class="b" id="l_go">Entrar y descargar</button><div id="l_msg" class="mu"></div></div>
+<div class="card"><b>Configuración descargada</b>
+<div id="b_info" class="mu">Sin descargar todavía.</div>
+<button class="b" id="b_dl">Actualizar configuración ahora</button><div id="b_msg" class="mu"></div>
+<p class="mu">Trae las claves de tus comerciales, los pagos, la comisión, el catálogo y los números limitados. Repítelo cuando cambies algo en el banco; mientras tanto, la app sigue usando la última descarga.</p></div>
+</section>
+
+<section id="imp" class="hide"><div class="card"><b>Importar archivos .jgd</b>
+<p class="mu">Ábrelos desde WhatsApp ("Compartir" → BancoPro) o elígelos aquí. Se validan al momento, sin internet.</p>
+<input type="file" id="fi" multiple><div id="res"></div></div></section>
+
+<section id="cod" class="hide"><div class="card"><b>Registrar código recibido</b>
+<p class="mu">El comercial te llama por teléfono y te dicta el código — no hace falta internet, ni de su parte ni de la tuya. Cuando más tarde descargues el archivo, se empareja solo, sin importar cuánto tiempo haya pasado.</p>
+<select id="c_com"></select>
+<input id="c_fec" type="date"><input id="c_cod" placeholder="Código (12 caracteres o 12 dígitos)" autocapitalize="characters">
+<button class="b" id="c_add">Guardar código</button><div id="c_msg" class="mu"></div></div>
+<div class="card"><b>Códigos registrados</b><div class="tbl" id="c_list"></div></div></section>
+
+<section id="res" class="hide"><div class="card"><b>Resultado del sorteo</b>
+<p class="mu">Centena (3) + corrido 1 (2) + corrido 2 (2), sin espacios. Ej: 8432517.</p>
+<input id="r_fec" type="date"><select id="r_lot"></select><select id="r_sor"></select>
+<input id="r_num" inputmode="numeric" placeholder="Número ganador"><div id="r_hint" class="mu"></div>
+<button class="b" id="r_add">Guardar resultado</button></div>
+<div class="card"><b>Resultados guardados</b><div class="tbl" id="r_list"></div></div></section>
+
+<section id="cua" class="hide">
+<div class="card">
+<b>Ver por</b>
+<div style="display:flex;gap:6px;margin:4px 0">
+ <button class="b" id="q_modo_dia" style="flex:1">Un día</button>
+ <button class="b" id="q_modo_rango" style="flex:1;background:var(--bg);color:var(--tx)">Rango de fechas</button>
+</div>
+<div id="q_dia_box"><input id="q_fec" type="date"></div>
+<div id="q_rango_box" class="hide">
+ <input id="q_desde" type="date"><input id="q_hasta" type="date">
+ <p class="mu">Suma todos los sorteos con fecha entre esos dos días (incluidos).</p>
+</div>
+<div id="q_resultado" class="banner" style="display:none"></div>
+<div class="tbl" id="q_tab"></div></div>
+<div class="card"><b>Cuadre por comercial (para copiar y enviar)</b>
+<p class="mu">Es de un solo día (mismo formato que ya usa la app del comercial); usa la fecha de "Un día" de arriba, aunque estés viendo un rango.</p>
+<select id="qc_com"></select>
+<input id="qc_fondo" inputmode="decimal" placeholder="Fondo actual (opcional, tú lo llevas)">
+<div id="qc_prev" class="mu" style="white-space:pre-wrap;font-family:monospace;font-size:12.5px"></div>
+<button class="b" id="qc_copy">Copiar cuadre de este comercial</button><div id="qc_msg" class="mu"></div></div>
+<div class="card"><b>Fichero faltantes</b>
+<p class="mu">Solo informativo: no bloquea nada, es para que sepas qué falta por llegar.</p>
+<div id="q_faltan_box">
+ <div id="q_faltan_cod"></div>
+ <div id="q_faltan_nada"></div>
+</div>
+</div></section>
+
+<section id="aju" class="hide"><div class="card"><b>Servidor (solo para la descarga de configuración)</b>
+<input id="a_url" placeholder="https://tu-dominio/licencias/api.php">
+<button class="b" id="a_save">Guardar</button></div>
+<div class="card"><b>Cerrar sesión</b><button class="b" id="a_logout" style="background:var(--er)">Cerrar sesión y borrar todo</button></div>
+</section>
+</main>
+<script>
+"use strict";
+const DEFAULT_API = "https://www.lotfast.x10.mx/licencias/api.php";
+
+/* ---------- IndexedDB ---------- */
+let DB;
+const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",4);
+ r.onupgradeneeded=()=>{const d=r.result,n=d.objectStoreNames;
+  if(!n.contains("archivos"))d.createObjectStore("archivos",{keyPath:"nonce"});
+  if(!n.contains("codigos"))d.createObjectStore("codigos",{keyPath:"id",autoIncrement:true});
+  if(!n.contains("resultados"))d.createObjectStore("resultados",{keyPath:"key"});
+  if(!n.contains("cfg"))d.createObjectStore("cfg",{keyPath:"k"});};
+ r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)});
+const tx=(s,m="readonly")=>DB.transaction(s,m).objectStore(s);
+const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const all=s=>rq(tx(s).getAll()),get=(s,k)=>rq(tx(s).get(k)),put=(s,v)=>rq(tx(s,"readwrite").put(v)),del=(s,k)=>rq(tx(s,"readwrite").delete(k));
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money=n=>Number(n||0).toLocaleString("es",{minimumFractionDigits:2,maximumFractionDigits:2});
+const apiUrl=async()=>(await get("cfg","api_url"))?.v||DEFAULT_API;
+
+/* ---------- Sesión / paquete de configuración (único uso de internet) ---------- */
+async function sesion(){return (await get("cfg","session"))?.v||null}
+async function bundle(){return (await get("cfg","bundle"))?.v||null}
+
+/* ---------- Cripto (idéntico al servidor / a la app del comerciante) ---------- */
+function canon(v){const t=Object.prototype.toString.call(v);
+ if(v===null||v===undefined)return"null";
+ if(t==="[object Number]"||t==="[object Boolean]"||t==="[object String]")return JSON.stringify(v);
+ if(Array.isArray(v))return"["+v.map(canon).join(",")+"]";
+ if(t==="[object Object]"){return"{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+canon(v[k])).join(",")+"}"}
+ return"null"}
+const hexOf=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+const b64b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function sha256(s){return hexOf(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))}
+function telefonico(sigBytes){let n=0n;for(const b of sigBytes.slice(0,6))n=(n<<8n)|BigInt(b);return(n%100000000000n).toString().padStart(12,"0")}
+function parseComercialId(str){str=String(str||"").trim();let m=str.match(/^COM-(\d+)$/i);if(m)return+m[1];if(/^\d+$/.test(str))return+str;return null}
+
+/* ---------- Datos derivados de la configuración descargada ---------- */
+function comercialPorId(bd,id){return (bd?.comerciales||[]).find(c=>c.id===id)}
+// Los pagos y límites del banco están separados por moneda (cup/mlc/usd/eur),
+// tal como los guarda el panel web (MONEDAS x TIPOS). Cada jugada trae su
+// propia moneda (o "cup" si no la trae, igual que hace la app del comerciante).
+function pagoEfectivo(bd,com,tipo,moneda){moneda=moneda||"cup";
+ const b=bd?.config?.pagos?.[moneda]?.[tipo];const o=com?.pagos?.[moneda]?.[tipo];
+ return (o!=null&&o>0)?o:(b!=null?b:{fijo:80,corrido:40,centena:500,parle:500}[tipo]||0)}
+function comisionEfectiva(bd,com,loteriaId){
+ if(com?.porcentaje!=null)return com.porcentaje;
+ const pl=com?.porcentaje_por_loteria?.[String(loteriaId)];if(pl!=null)return pl;
+ return bd?.config?.porcentaje!=null?bd.config.porcentaje:0}
+function sorteoDe(bd,lot,sor){return (bd?.sorteos||[]).find(s=>String(s.loteria_id)===String(lot)&&String(s.id)===String(sor))}
+
+/* ---------- Validación de un .jgd (todo local, sin llamar al servidor) ---------- */
+async function validar(nombre,texto){
+ const out={nombre,estado:"ok",avisos:[],errores:[]};
+ let a;try{a=JSON.parse(texto)}catch{out.estado="er";out.errores.push("No es un JSON válido");return out}
+ const h=a.header,p=a.payload;
+ if(!h||!p||!Array.isArray(p.jugadas)){out.estado="er";out.errores.push("Estructura inválida");return out}
+ out.h=h;
+ const bd=await bundle();
+ const comId=parseComercialId(h.comercial_id);
+ const com=comId!=null?comercialPorId(bd,comId):null;
+
+ const hash=await sha256(canon(p));
+ if(hash!==h.hash_contenido){out.estado="er";out.errores.push("El contenido fue ALTERADO (el hash no coincide)")}
+ if(hash.slice(0,12).toUpperCase()!==String(h.codigo_verificacion).toUpperCase()){out.estado="er";out.errores.push("El código de verificación no corresponde al contenido")}
+ const suma=Math.round(p.jugadas.reduce((s,j)=>s+Math.round((j.monto_total||0)*100),0))/100;
+ if(p.resumen&&(p.resumen.total_jugadas!==p.jugadas.length||Math.abs(p.resumen.monto_total-suma)>0.005)){out.estado="er";out.errores.push("El resumen no coincide con las jugadas")}
+
+ if(!bd){out.avisos.push("No has descargado la configuración: no se puede verificar la firma ni calcular premios todavía");if(out.estado==="ok")out.estado="wa"}
+ else if(!com){out.estado="er";out.errores.push("Comercial "+esc(h.comercial_id)+" no existe en la configuración descargada")}
+ else if(!com.clave_secreta){out.avisos.push("Este comercial no tiene clave configurada en el banco");if(out.estado==="ok")out.estado="wa"}
+ else{try{
+  const key=await crypto.subtle.importKey("raw",b64b(com.clave_secreta),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
+  const f=JSON.stringify;const msg="{"+[h.hash_contenido,h.codigo_verificacion,h.comercial_id,h.nonce,h.fecha_sorteo].map(f).join(",")+"}";
+  const sig=b64b(h.firma);
+  if(!await crypto.subtle.verify("HMAC",key,sig,new TextEncoder().encode(msg))){out.estado="er";out.errores.push("Firma inválida: no fue generado con la clave de este comercial")}
+  else if(telefonico(sig)!==String(h.codigo_telefonico)){out.estado="er";out.errores.push("El código telefónico no corresponde a la firma")}
+ }catch(e){out.estado="er";out.errores.push("Clave o firma con formato inválido")}}
+
+ if(await get("archivos",h.nonce)){out.estado="du";out.avisos.push("Ya importado antes (nonce repetido)");return out}
+
+ const lot=p.jugadas[0]?.loteria_id, sor=p.jugadas[0]?.sorteo_id;
+ const sorteo=bd?sorteoDe(bd,lot,sor):null;
+ if(sorteo?.hora_cierre&&h.fecha_generacion){
+  const cierre=new Date(h.fecha_sorteo+"T"+sorteo.hora_cierre);const gen=new Date(h.fecha_generacion);
+  if(!isNaN(cierre)&&!isNaN(gen)&&gen>cierre){out.avisos.push("Generado después del cierre del sorteo ("+sorteo.hora_cierre+")");if(out.estado==="ok")out.estado="wa"}
+ }
+
+ out.reg={nonce:h.nonce,comercial:h.comercial_id,comercial_num:comId,fecha:h.fecha_sorteo,codigo:h.codigo_verificacion,tel:h.codigo_telefonico,
+  loteria:lot??"",sorteo:sor??"",jugadas:p.jugadas.length,monto:suma,
+  estado:out.estado,avisos:out.avisos,errores:out.errores,generado:h.fecha_generacion,importado:new Date().toISOString(),jug:p.jugadas};
+ return out}
+
+/* ---------- Importación (100% local) ---------- */
+async function importar(nombre,texto){
+ const r=await validar(nombre,texto);
+ if(r.reg){
+  const cods=(await all("codigos")).filter(c=>String(c.comercial)===String(r.reg.comercial_num)&&c.fecha===r.reg.fecha);
+  const m=cods.find(c=>c.estado!=="confirmado"&&[r.reg.codigo,r.reg.tel].includes(c.codigo));
+  if(m){m.estado=r.reg.estado==="er"?"alterado":"confirmado";m.archivo=r.reg.nonce;m.confirmado=r.reg.importado;await put("codigos",m);r.avisos.push("Coincide con el código registrado ✔")}
+  else if(cods.some(c=>c.estado==="pendiente")){r.avisos.push("Hay códigos pendientes de este comercial/fecha y ninguno coincide");if(r.reg.estado==="ok")r.reg.estado="wa"}
+  await put("archivos",{...r.reg,nombre});
+ }
+ pintarRes(r);await refrescar();return r}
+window.bancoImportar=(n,t)=>{show("imp");return importar(n,t)};
+function pintarRes(r){
+ const c={ok:["ok","Válido"],wa:["wa","Válido con avisos"],er:["er","RECHAZADO"],du:["wa","Duplicado"]}[r.estado]||["er","Error"];
+ const d=document.createElement("div");d.className="card";
+ d.innerHTML=`<span class="tag ${c[0]}">${c[1]}</span> <b>${esc(r.nombre)}</b>`+
+  (r.h?`<div class="mu">Comercial ${esc(r.h.comercial_id)} · ${esc(r.h.fecha_sorteo)} · ${r.reg?r.reg.jugadas+" jugadas · "+money(r.reg.monto):""}</div>`:"")+
+  [...r.errores.map(e=>`<div class="er">✖ ${esc(e)}</div>`),...r.avisos.map(e=>`<div class="wa">• ${esc(e)}</div>`)].join("");
+ document.getElementById("res").prepend(d)}
+document.getElementById("fi").onchange=async e=>{for(const f of e.target.files)await importar(f.name,await f.text());e.target.value=""};
+
+/* ---------- Sesión / login (única llamada de red, para traer la configuración) ---------- */
+async function pintarSesion(){
+ const s=await sesion();
+ document.getElementById("ses_loginbox").classList.toggle("hide",!!s);
+ document.getElementById("ses_logged").innerHTML=s?`Banco: <b>${esc(s.banco_nombre)}</b> (${esc(s.usuario)}). <a href="#" id="ses_out">Cerrar sesión</a>`:'<span class="mu">Sin sesión guardada.</span>';
+ document.getElementById("ses_out")?.addEventListener("click",async e=>{e.preventDefault();await cerrarSesion()});
+ const bd=await bundle();
+ document.getElementById("b_info").innerHTML=bd?`Última actualización: ${new Date(bd.generado_at*1000).toLocaleString()} · ${bd.comerciales.length} comerciales · ${bd.sorteos.length} sorteos`:"Sin descargar todavía.";
+ await pintarPendientesResumen();
+}
+async function pintarPendientesResumen(){
+ const bd=await bundle();
+ const pend=(await all("codigos")).filter(c=>c.estado==="pendiente");
+ const box=document.getElementById("ses_pendientes");
+ if(!pend.length){box.innerHTML='<span class="ok">✔ No hay códigos esperando archivo.</span>';return}
+ const masAntiguo=pend.reduce((a,b)=>a.fecha<b.fecha?a:b);
+ const nombre=id=>comercialPorId(bd,+id)?.nombre||id;
+ box.innerHTML=`<b class="wa">${pend.length} código${pend.length>1?"s":""} esperando archivo</b>`+
+  `<div class="mu">El más viejo: ${esc(nombre(masAntiguo.comercial))}, del ${esc(masAntiguo.fecha)}.</div>`+
+  `<a href="#" id="ses_ver_cod">Ver en Códigos →</a>`;
+ document.getElementById("ses_ver_cod").onclick=e=>{e.preventDefault();show("cod")};
+}
+l_go.onclick=async()=>{
+ l_msg.textContent="Conectando...";
+ try{
+  const r=await fetch((await apiUrl())+"?action=banca_login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({usuario:l_user.value.trim(),password:l_pass.value})});
+  const d=await r.json();
+  if(!d.ok){l_msg.textContent="Error: "+(d.error||"credenciales inválidas");return}
+  await put("cfg",{k:"session",v:{token:d.token,banco_id:d.banco_id,banco_nombre:d.banco_nombre,usuario:l_user.value.trim()}});
+  l_msg.textContent="";l_pass.value="";await refrescar();await descargarConfig()
+ }catch(e){l_msg.textContent="Sin conexión ahora. Intenta cuando tengas señal, aunque sea un momento."}
+};
+async function cerrarSesion(){await del("cfg","session");await del("cfg","bundle");await refrescar()}
+a_logout.onclick=async()=>{if(confirm("¿Borrar sesión y configuración descargada de este teléfono? Los archivos, códigos y resultados guardados NO se borran.")){await cerrarSesion()}};
+
+async function descargarConfig(){
+ const s=await sesion();if(!s){b_msg.textContent="Inicia sesión primero.";return}
+ b_msg.textContent="Descargando...";
+ try{
+  const r=await fetch((await apiUrl())+"?action=banca_get_paquete_offline",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+s.token},body:"{}"});
+  const d=await r.json();
+  if(!d.ok){b_msg.textContent="Error: "+(d.error||"no se pudo descargar. Verifica que la acción banca_get_paquete_offline esté agregada en el servidor.");return}
+  await put("cfg",{k:"bundle",v:d});b_msg.textContent="Listo. Ya puedes trabajar sin conexión.";await refrescar();
+ }catch(e){b_msg.textContent="Sin conexión ahora mismo. La app sigue usando la configuración anterior."}
+}
+b_dl.onclick=descargarConfig;
+
+/* ---------- Registrar código (100% local) ---------- */
+async function pintarComerciales(){
+ const bd=await bundle();const opts=(bd?.comerciales||[]).filter(c=>c.activo).map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join("");
+ c_com.innerHTML=opts||'<option value="">(descarga la configuración primero)</option>';
+ r_lot.innerHTML=(bd?.loterias||[]).map(l=>`<option value="${l.id}">${esc(l.nombre)}</option>`).join("")||'<option value="">(sin catálogo)</option>';
+ r_lot.onchange=()=>{const s=(bd?.sorteos||[]).filter(s=>String(s.loteria_id)===r_lot.value);r_sor.innerHTML=s.map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join("")};
+ r_lot.onchange()}
+
+c_add.onclick=async()=>{
+ const com=c_com.value,fec=c_fec.value,cod=c_cod.value.trim().toUpperCase().replace(/\s/g,"");
+ if(!com||!fec||!/^([0-9A-F]{12}|\d{12})$/.test(cod)){c_msg.textContent="Elige comercial, fecha y un código de 12 caracteres.";return}
+ await put("codigos",{comercial:com,fecha:fec,codigo:cod,estado:"pendiente",recibido:new Date().toISOString()});
+ c_cod.value="";c_msg.textContent="Guardado "+new Date().toLocaleTimeString();await refrescar()};
+async function listaCodigos(){
+ const l=(await all("codigos")).sort((a,b)=>b.recibido.localeCompare(a.recibido));
+ const cl={pendiente:"wa",confirmado:"ok",alterado:"er"};
+ const bd=await bundle();const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id;
+ c_list.innerHTML=l.length?"<table>"+l.map(c=>`<tr><td>${esc(nombreCom(c.comercial))}</td><td>${esc(c.fecha)}</td><td>${esc(c.codigo)}</td><td class="${cl[c.estado]}">${c.estado}</td><td><a href="#" data-d="${c.id}">borrar</a></td></tr>`).join("")+"</table>":'<p class="mu">Sin códigos.</p>';
+ c_list.querySelectorAll("[data-d]").forEach(a=>a.onclick=async e=>{e.preventDefault();if(confirm("¿Borrar este código?")){await del("codigos",+a.dataset.d);refrescar()}});
+ return l}
+
+/* ---------- Resultados (100% local) ---------- */
+r_num.oninput=()=>{const r=r_num.value.replace(/\s/g,"");r_hint.textContent=/^\d{3,}$/.test(r)?`centena ${r.slice(0,3)} · fijo ${r.slice(1,3)}`+(r.length>=5?` · corrido1 ${r.slice(3,5)}`:"")+(r.length>=7?` · corrido2 ${r.slice(5,7)}`:""):""};
+r_add.onclick=async()=>{const num=r_num.value.replace(/\s/g,""),f=r_fec.value,l=r_lot.value,so=r_sor.value;
+ if(!f||!l||!so||!/^\d{7}$/.test(num)&&!(/^\d{3}$|^\d{5}$/.test(num)&&confirm("El número no tiene 7 dígitos. ¿Guardar así?")))return alert("Completa fecha, lotería, sorteo y un número ganador válido.");
+ await put("resultados",{key:[f,l,so].join("|"),fecha:f,loteria:l,sorteo:so,numero:num,registrado:new Date().toISOString()});r_num.value="";r_hint.textContent="";refrescar()};
+async function listaResultados(){
+ const rs=(await all("resultados")).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+ const bd=await bundle();const nomLot=id=>(bd?.loterias||[]).find(l=>String(l.id)===String(id))?.nombre||("Lot "+id);
+ const nomSor=id=>(bd?.sorteos||[]).find(s=>String(s.id)===String(id))?.nombre||("Sor "+id);
+ r_list.innerHTML=rs.length?"<table>"+rs.map(r=>`<tr><td>${esc(r.fecha)}</td><td>${esc(nomLot(r.loteria))}</td><td>${esc(nomSor(r.sorteo))}</td><td><b>${esc(r.numero)}</b></td><td><a href="#" data-r="${esc(r.key)}">borrar</a></td></tr>`).join("")+"</table>":'<p class="mu">Sin resultados.</p>';
+ r_list.querySelectorAll("[data-r]").forEach(a=>a.onclick=async e=>{e.preventDefault();if(confirm("¿Borrar resultado?")){await del("resultados",a.dataset.r);refrescar()}})}
+
+/* ---------- Premios (motor local, con overrides de numeros_limitados) ---------- */
+const arr=v=>!v?[]:Array.isArray(v)?v.map(x=>String(x).trim()).filter(Boolean):String(v).split(",").map(x=>x.trim()).filter(Boolean);
+function variantes(n){n=String(n);const o=[n],m={"0":["O","o"],"1":["I","i","l","L"],"2":["Z","z"],"5":["S","s"],"8":["B","b"]};
+ for(let i=0;i<n.length;i++)if(m[n[i]])for(const a of m[n[i]]){const c=n.split("");c[i]=a;o.push(c.join(""))}return[...new Set(o)]}
+function pares(f,c1,c2){const p=[];if(f&&c1)p.push(f+c1,c1+f);if(f&&c2)p.push(f+c2,c2+f);if(c1&&c2)p.push(c1+c2,c2+c1);return p}
+// Las reglas de numeros_limitados no distinguen moneda en el panel; se
+// aplican igual sobre el pago base ya resuelto para la moneda de la jugada.
+function pagoNumero(bd,com,loteriaId,sorteoId,numero,tipo,base){
+ const nl=(bd?.numeros_limitados||[]).filter(r=>r.numero===numero&&(!r.loteria_id||String(r.loteria_id)===String(loteriaId))&&(!r.sorteo_id||String(r.sorteo_id)===String(sorteoId)));
+ for(const r of nl){
+  if(r.pago_por_tipo&&r.pago_por_tipo[tipo]!=null)return+r.pago_por_tipo[tipo];
+  if(r.categoria_jugada&&r.categoria_jugada!==tipo)continue;
+  if(r.tipo_regla==="PAGO_FIJO")return+r.valor;
+  if(r.tipo_regla==="PAGO_PORCENTAJE")return base*(+r.valor/100);
+ }
+ return base}
+function calcPremios(bd,com,loteriaId,sorteoId,jugadas,num,fijoComoCorrido){
+ const cen=num.slice(0,3),fijo=cen.slice(-2),c1=num.length>=5?num.slice(3,5):null,c2=num.length>=7?num.slice(5,7):null;
+ const vF=variantes(fijo),vC1=c1?variantes(c1):[],vC2=c2?variantes(c2):[],vCen=variantes(cen);
+ const par=new Set(pares(fijo,c1,c2).flatMap(variantes)),ganSet=new Set([...vF,...vC1,...vC2]);
+ const COMB=["parle","candado","candado_combinaciones","parle_global","candado_global"],gan=[];let total=0;
+ const add=(j,label,monto,tipo)=>{if(monto>0){gan.push({jugador:j.jugador,label,monto,tipo});total+=monto}};
+ for(const j of jugadas){if(j.es_bote)continue;
+  for(const d of (j.detalles||[])){
+   const tipo=d.tipo||"fijo",nums=arr(d.numeros),combs=arr(d.combinaciones);
+   const moneda=d.moneda||j.moneda||"cup";
+   const mu=(d.monto_unitario!=null&&d.monto_unitario!=="")?parseFloat(d.monto_unitario):parseFloat(d.monto||0)/(nums.length||1);
+   const base=pagoEfectivo(bd,com,{fijo:"fijo",corrido:"corrido",centena:"centena",parle:"parle",candado:"parle",rango:"fijo"}[tipo]||tipo,moneda);
+   const cuenta=v=>nums.filter(n=>n===v).length;
+   if(tipo==="centena"){for(const v of vCen){const c=cuenta(v);if(c)add(j,"Centena "+v,c*mu*pagoNumero(bd,com,loteriaId,sorteoId,v,"centena",base),tipo)}continue}
+   if(tipo==="fijo"||tipo==="rango"){for(const v of vF){const c=cuenta(v);if(c)add(j,"Fijo "+v,c*mu*pagoNumero(bd,com,loteriaId,sorteoId,v,"fijo",base),tipo)}continue}
+   if(tipo==="corrido"){for(const v of [...vC1,...vC2]){const c=cuenta(v);if(c)add(j,"Corrido "+v,c*mu*pagoNumero(bd,com,loteriaId,sorteoId,v,"corrido",base),tipo)}
+    if(fijoComoCorrido)for(const v of vF){const c=cuenta(v);if(c)add(j,"Corrido "+v,c*mu*pagoEfectivo(bd,com,"corrido",moneda),tipo)}continue}
+   if(COMB.includes(tipo)){let cg=[];
+    if(combs.length)cg=combs.filter(c=>{const x=String(c).trim();return par.has(x)||variantes(x).some(v=>par.has(v))});
+    else{const ac=nums.filter(n=>ganSet.has(n));
+     for(let i=0;i<ac.length;i++)for(let k=i+1;k<ac.length;k++){
+      if(ac[i]===ac[k]&&[fijo,c1,c2].filter(x=>x===ac[i]).length<2)continue;
+      cg.push(ac[i]<=ac[k]?ac[i]+ac[k]:ac[k]+ac[i])}}
+    if(cg.length)add(j,"Parle ("+[...new Set(cg)].join(", ")+")",mu*pagoEfectivo(bd,com,"parle",moneda)*cg.length,"parle")}}}
+ return{total,gan}}
+
+/* ---------- Cuadre (100% local) ---------- */
+let _modoRango=false;
+function enRango(fecha,desde,hasta){if(desde&&fecha<desde)return false;if(hasta&&fecha>hasta)return false;return true}
+async function cuadre(){
+ const fec=q_fec.value,desde=q_desde.value,hasta=q_hasta.value,bd=await bundle();
+ const res=Object.fromEntries((await all("resultados")).map(r=>[r.key,r]));
+ const conf=new Set((await all("codigos")).filter(c=>c.estado==="confirmado").map(c=>c.archivo));
+ const arch=(await all("archivos")).filter(a=>a.estado!=="er"&&(_modoRango?enRango(a.fecha,desde,hasta):(!fec||a.fecha===fec)));
+ const g={};for(const a of arch)(g[[a.comercial_num,a.fecha,a.loteria,a.sorteo].join("|")]??=[]).push(a);
+ const por={};
+ for(const l of Object.values(g)){
+  l.sort((x,y)=>(conf.has(y.nonce)-conf.has(x.nonce))||String(y.generado).localeCompare(String(x.generado)));
+  const a=l[0],com=bd?comercialPorId(bd,a.comercial_num):null,nombre=com?.nombre||a.comercial;
+  const p=(por[nombre]??={jug:0,mon:0,prem:0,sin:0,av:0,gan:[]});
+  p.jug+=a.jugadas;p.mon+=a.monto;if(a.estado==="wa"||l.length>1)p.av++;
+  const r=res[[a.fecha,a.loteria,a.sorteo].join("|")];
+  if(!r||!a.jug){p.sin++;continue}
+  if(!bd){p.sin++;continue}
+  const c=calcPremios(bd,com,a.loteria,a.sorteo,a.jug,r.numero,!!bd.config?.fijo_paga_como_corrido);p.prem+=c.total;p.gan.push(...c.gan)}
+ const ks=Object.keys(por).sort(),T={jug:0,mon:0,com:0,prem:0};let det="";
+ q_tab.innerHTML=ks.length?"<table><tr><th>Comercial</th><th class=r>Jugadas</th><th class=r>Venta</th><th class=r>Comisión</th><th class=r>Premios</th><th class=r>Saldo</th></tr>"+ks.map(k=>{
+  const p=por[k],com=(bd?.comerciales||[]).find(c=>c.nombre===k),pc=comisionEfectiva(bd,com,null),co=p.mon*pc/100,saldo=p.mon-co-p.prem;
+  T.jug+=p.jug;T.mon+=p.mon;T.com+=co;T.prem+=p.prem;
+  if(p.gan.length)det+=`<details><summary>${esc(k)}: ${p.gan.length} premios</summary><table>`+p.gan.sort((x,y)=>y.monto-x.monto).map(x=>`<tr><td>${esc(x.jugador)}</td><td>${esc(x.label)}</td><td class=r>${money(x.monto)}</td></tr>`).join("")+"</table></details>";
+  return`<tr><td>${esc(k)}${p.av?' <span class="wa" title="Avisos o varias versiones">⚠</span>':""}${p.sin?` <span class="mu">(${p.sin} sin resultado)</span>`:""}</td><td class=r>${p.jug}</td><td class=r>${money(p.mon)}</td><td class=r>${money(co)}</td><td class=r>${money(p.prem)}</td><td class="r ${saldo>=0?"ok":"er"}"><b>${money(saldo)}</b></td></tr>`}).join("")+
+  `<tr><th>Total</th><th class=r>${T.jug}</th><th class=r>${money(T.mon)}</th><th class=r>${money(T.com)}</th><th class=r>${money(T.prem)}</th><th class=r>${money(T.mon-T.com-T.prem)}</th></tr></table><p class="mu">Saldo = venta − comisión − premios. Positivo: el comercial entrega al banco. Negativo: el banco paga.</p>`+det:'<p class="mu">Sin archivos válidos para este filtro.</p>';
+ const saldoTotal=T.mon-T.com-T.prem;
+ if(ks.length){
+  q_resultado.style.display="";
+  q_resultado.className="banner "+(saldoTotal>=0?"ok":"wa");
+  const periodo=_modoRango?`del ${desde||"…"} al ${hasta||"…"}`:(fec?`del ${fec}`:"de todas las fechas");
+  q_resultado.innerHTML=`<b>${saldoTotal>=0?"El banco ganó":"El banco perdió"} ${money(Math.abs(saldoTotal))} ${periodo}</b> (venta ${money(T.mon)} − comisión ${money(T.com)} − premios ${money(T.prem)})`;
+ } else { q_resultado.style.display="none"; }
+ await pintarFaltantes(desde,hasta);
+ await pintarCuadreComercial();
+}
+
+/* ---------- Fichero faltantes (solo informativo, no bloquea nada) ----------
+   Dos cosas distintas:
+   1) Código ya registrado (el comercial avisó) pero el .jgd no ha llegado.
+   2) Sorteo ya cerrado, de un comercial activo, sin código NI archivo:
+      el banco no tiene ninguna señal todavía de ese sorteo. */
+async function pintarFaltantes(desde,hasta){
+ const bd=await bundle(),fec=q_fec.value;
+ const pen=(await all("codigos")).filter(c=>c.estado==="pendiente"&&(_modoRango?enRango(c.fecha,desde,hasta):(!fec||c.fecha===fec)));
+ q_faltan_cod.innerHTML=pen.length?"<b class=\"wa\">Con código, sin archivo:</b><table>"+pen.map(c=>{
+  const nombre=comercialPorId(bd,+c.comercial)?.nombre||c.comercial;
+  return `<tr><td>${esc(nombre)}</td><td>${esc(c.fecha)}</td><td>${esc(c.codigo)}</td><td class="mu">hace ${Math.round((Date.now()-new Date(c.recibido))/60000)} min</td></tr>`}).join("")+"</table>":"";
+
+ if(!bd||!bd.comerciales?.length||!bd.sorteos?.length){q_faltan_nada.innerHTML=pen.length?"":'<p class="mu">Nada pendiente.</p>';return}
+ const hoy=new Date().toISOString().slice(0,10),ahora=Date.now();
+ const dias=_modoRango?diasEntre(desde,hasta):[fec].filter(Boolean);
+ const arch=await all("archivos");
+ const yaTiene=(com,fecha,lot,sor)=>arch.some(a=>a.estado!=="er"&&a.comercial_num===com&&a.fecha===fecha&&String(a.loteria)===String(lot)&&String(a.sorteo)===String(sor));
+ const yaAvisoCodigo=new Set(pen.map(c=>[c.comercial,c.fecha].join("|")));
+ const faltan=[];
+ for(const fecha of dias){
+  if(fecha>hoy)continue; // sorteos de un día futuro, todavía no aplica
+  for(const com of (bd.comerciales||[]).filter(c=>c.activo)){
+   for(const sor of (bd.sorteos||[])){
+    if(fecha===hoy){ // hoy: solo lo que ya cerró
+     if(!sor.hora_cierre)continue;
+     const cierre=new Date(fecha+"T"+sor.hora_cierre);
+     if(isNaN(cierre)||cierre.getTime()>ahora)continue;
+    }
+    if(yaTiene(com.id,fecha,sor.loteria_id,sor.id))continue;
+    if(yaAvisoCodigo.has([com.id,fecha].join("|")))continue; // ya cuenta arriba como "con código"
+    const lotNombre=(bd.loterias||[]).find(l=>String(l.id)===String(sor.loteria_id))?.nombre||("Lot "+sor.loteria_id);
+    faltan.push({com:com.nombre,fecha,txt:`${lotNombre} ${sor.horario||sor.nombre||""}`.trim()});
+   }
+  }
+ }
+ q_faltan_nada.innerHTML=faltan.length?
+  '<b class="er">Sin código ni archivo:</b><table>'+faltan.map(f=>`<tr><td>${esc(f.com)}</td><td>${esc(f.fecha)}</td><td>${esc(f.txt)}</td></tr>`).join("")+"</table>"
+  :(pen.length?"":'<p class="mu">Nada pendiente: todos los sorteos vencidos ya tienen archivo o código.</p>');
+}
+function diasEntre(desde,hasta){
+ if(!desde||!hasta)return[];
+ const out=[];let d=new Date(desde+"T00:00:00");const h=new Date(hasta+"T00:00:00");
+ while(d<=h){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1)}
+ return out}
+q_fec.onchange=cuadre;
+q_desde.onchange=cuadre;q_hasta.onchange=cuadre;
+function setModoCuadre(rango){
+ _modoRango=rango;
+ q_dia_box.classList.toggle("hide",rango);q_rango_box.classList.toggle("hide",!rango);
+ q_modo_dia.style.background=rango?"var(--bg)":"var(--ac)";q_modo_dia.style.color=rango?"var(--tx)":"#fff";
+ q_modo_rango.style.background=rango?"var(--ac)":"var(--bg)";q_modo_rango.style.color=rango?"#fff":"var(--tx)";
+ cuadre();
+}
+q_modo_dia.onclick=()=>setModoCuadre(false);
+q_modo_rango.onclick=()=>setModoCuadre(true);
+
+/* ---------- Cuadre por comercial, en el mismo formato que copiarCuadreTexto()
+   de la app del comercial (Banco/Comercial/Fecha, un bloque por sorteo con
+   Total/Porciento/Limpio/Premio/Banco, tabulado igual, números con coma).
+   OJO: no aplica la reducción por "excedidos" (números que pasaron el
+   límite configurado) que sí hace la app del comercial; si un número se
+   pasó de límite ese día, el Total aquí puede salir un poco más alto que
+   en la app real. */
+function numTxt(n){ // igual que el formato observado: sin ceros de relleno, coma decimal
+ const s=(Math.round((n+Number.EPSILON)*100)/100).toString();
+ return s.replace(".",",")}
+async function pintarQcCom(){
+ const bd=await bundle();
+ qc_com.innerHTML=(bd?.comerciales||[]).filter(c=>c.activo).map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join("")||'<option value="">(descarga la configuración primero)</option>';
+}
+async function textoCuadreComercial(comId){
+ const bd=await bundle();if(!bd||!comId)return"";
+ const com=comercialPorId(bd,+comId);if(!com)return"";
+ const fec=q_fec.value;
+ const res=Object.fromEntries((await all("resultados")).map(r=>[r.key,r]));
+ const conf=new Set((await all("codigos")).filter(c=>c.estado==="confirmado").map(c=>c.archivo));
+ const arch=(await all("archivos")).filter(a=>a.estado!=="er"&&a.comercial_num===+comId&&(!fec||a.fecha===fec));
+ const g={};for(const a of arch)(g[[a.loteria,a.sorteo].join("|")]??=[]).push(a);
+ // Orden: loterías en el orden del catálogo, y dentro de cada una por hora del sorteo
+ const ordenLot=(bd.loterias||[]).map(l=>String(l.id));
+ const claves=Object.keys(g).sort((k1,k2)=>{
+  const [l1,s1]=k1.split("|"),[l2,s2]=k2.split("|");
+  const i1=ordenLot.indexOf(l1),i2=ordenLot.indexOf(l2);
+  if(i1!==i2)return i1-i2;
+  const so1=sorteoDe(bd,l1,s1),so2=sorteoDe(bd,l2,s2);
+  return String(so1?.hora_cierre||"").localeCompare(String(so2?.hora_cierre||""))});
+
+ let txt=`Banco: ${bd.banco_nombre||""}\nComercial:${com.nombre}\nFecha:${fec?fec.split("-").reverse().map(Number).join("/"):""}\n`;
+ let totalBanco=0,totalComercial=0;
+ for(const k of claves){
+  const [lot,sor]=k.split("|");
+  const l=g[k].slice().sort((x,y)=>(conf.has(y.nonce)-conf.has(x.nonce))||String(y.generado).localeCompare(String(x.generado)))[0];
+  const lotNombre=(bd.loterias||[]).find(x=>String(x.id)===lot)?.nombre||("Lot "+lot);
+  const sorteo=sorteoDe(bd,lot,sor);
+  const total=l.monto,pct=comisionEfectiva(bd,com,lot),porciento=total*pct/100,limpio=total-porciento;
+  const r=res[[l.fecha,lot,sor].join("|")];
+  const premio=(r&&l.jug)?calcPremios(bd,com,lot,sor,l.jug,r.numero,!!bd.config?.fijo_paga_como_corrido).total:0;
+  const bancoSaldo=limpio-premio;
+  txt+=`\n${lotNombre}\n`;
+  if(sorteo?.horario||sorteo?.nombre)txt+=`\t${sorteo?.horario||sorteo?.nombre}\n`;
+  txt+=`\t\tTarjeta\n`;
+  txt+=`\t\t\tTotal:${numTxt(total)}\n`;
+  txt+=`\t\t\tPorciento:${numTxt(porciento)}\n`;
+  txt+=`\t\t\tLimpio:${numTxt(limpio)}\n`;
+  txt+=`\t\t\tPremio:${numTxt(premio)}\n`;
+  txt+=`\t\t\tBanco:${numTxt(bancoSaldo)}\n`;
+  totalBanco+=bancoSaldo;totalComercial+=porciento;
+ }
+ const fondo=parseFloat(String(qc_fondo.value).replace(",","."))||0;
+ txt+=`\nTotal Banco\n\tTarjeta:${numTxt(totalBanco)}\n\tSaldo:0\n\tMLC:0\n\tEfectivo:0\n`;
+ txt+=`Total Comercial\n\tTarjeta:${numTxt(totalComercial)}\n\tSaldo:0\n\tMLC:0\n\tEfectivo:0\n`;
+ txt+=`Total Colector\n\tTarjeta:0\n\tSaldo:0\n\tMLC:0\n\tEfectivo:0\n`; // BancoPro no maneja colectores todavía
+ txt+=`Fondo\n\tTarjeta:${numTxt(fondo)}\n`; // valor que tú llevas; la app solo lo recuerda
+ return txt}
+async function actualizarPreviaQc(){qc_prev.textContent=await textoCuadreComercial(qc_com.value)}
+qc_com.onchange=actualizarPreviaQc;qc_fondo.oninput=actualizarPreviaQc;
+qc_copy.onclick=async()=>{
+ if(!qc_com.value){qc_msg.textContent="Elige un comercial.";return}
+ await put("cfg",{k:"fondo_"+qc_com.value,v:qc_fondo.value});
+ const txt=await textoCuadreComercial(qc_com.value);
+ try{
+  if(navigator.clipboard&&window.isSecureContext!==false){await navigator.clipboard.writeText(txt)}
+  else{const ta=document.createElement("textarea");ta.value=txt;ta.style.position="fixed";ta.style.opacity="0";
+   document.body.appendChild(ta);ta.focus();ta.select();document.execCommand("copy");document.body.removeChild(ta);}
+  qc_msg.textContent="Copiado ✔ Ya puedes pegarlo en WhatsApp.";
+ }catch(e){qc_msg.textContent="No se pudo copiar. Mantén presionado el texto de arriba para copiarlo a mano.";}
+ setTimeout(()=>qc_msg.textContent="",4000);
+};
+async function pintarCuadreComercial(){
+ await pintarQcCom();
+ if(qc_com.value){const g=await get("cfg","fondo_"+qc_com.value);if(g)qc_fondo.value=g.v}
+ await actualizarPreviaQc();
+}
+
+/* ---------- Ajustes ---------- */
+a_save.onclick=async()=>{await put("cfg",{k:"api_url",v:a_url.value.trim()||DEFAULT_API});alert("Guardado")};
+
+/* ---------- Navegación ---------- */
+function show(t){document.querySelectorAll("main > section").forEach(s=>s.classList.toggle("hide",s.id!==t));
+ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===t))}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.t));
+
+async function refrescar(){
+ await pintarSesion();await pintarComerciales();await listaCodigos();await listaResultados();await cuadre();
+}
+openDB().then(async()=>{
+ a_url.value=await apiUrl();
+ c_fec.value=q_fec.value=r_fec.value=new Date().toISOString().slice(0,10);
+ const hace7=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+ q_desde.value=hace7;q_hasta.value=q_fec.value;
+ await refrescar();
+});
+</script></body></html>
