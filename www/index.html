@@ -210,7 +210,7 @@ async function validar(nombre,texto){
 /* ---------- Importación (100% local) ---------- */
 async function importar(nombre,texto){
  const r=await validar(nombre,texto);
- if(r.reg){
+ if(r.reg && r.estado!=="er" && r.estado!=="du"){
   const cods=(await all("codigos")).filter(c=>String(c.comercial)===String(r.reg.comercial_num)&&c.fecha===r.reg.fecha);
   const m=cods.find(c=>c.estado!=="confirmado"&&[r.reg.codigo,r.reg.tel].includes(c.codigo));
   if(m){m.estado=r.reg.estado==="er"?"alterado":"confirmado";m.archivo=r.reg.nonce;m.confirmado=r.reg.importado;await put("codigos",m);r.avisos.push("Coincide con el código registrado ✔")}
@@ -288,7 +288,12 @@ c_add.onclick=async()=>{
  if(!com||!fec||!/^([0-9A-F]{12}|\d{12})$/.test(cod)){c_msg.textContent="Elige comercial, fecha y un código de 12 caracteres.";return}
  await put("codigos",{comercial:com,fecha:fec,codigo:cod,estado:"pendiente",recibido:new Date().toISOString()});
  c_cod.value="";c_msg.textContent="Guardado "+new Date().toLocaleTimeString();await refrescar()};
+async function eliminarRechazadosGuardados(){
+ const l=await all("archivos");
+ for(const a of l)if(a.estado==="er")await del("archivos",a.nonce);
+}
 async function listaArchivos(){
+ await eliminarRechazadosGuardados();
  const l=(await all("archivos")).sort((a,b)=>String(b.importado||"").localeCompare(String(a.importado||"")));
  const bd=await bundle();
  const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id||"—";
