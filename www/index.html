@@ -18,6 +18,10 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 .tbl{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
 .r{text-align:right}.hide{display:none}.banner{padding:8px 10px;border-radius:9px;font-size:13px;margin-bottom:8px}
 .banner.wa{background:color-mix(in srgb,var(--wa) 15%,transparent)}
+.file-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)}
+.file-main{min-width:0;flex:1}.file-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-actions{display:flex;gap:6px;flex:0 0 auto}.file-actions button{width:auto;margin:0;padding:7px 9px}
+.file-content{white-space:pre-wrap;word-break:break-word;max-height:60vh;overflow:auto;background:var(--bg);border:1px solid var(--bd);border-radius:9px;padding:10px;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
 </style></head><body>
 <header>BancoPro <span class="mu">· todo se procesa en el teléfono</span></header>
 <nav>
@@ -41,9 +45,19 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <p class="mu">Trae las claves de tus comerciales, los pagos, la comisión, el catálogo y los números limitados. Repítelo cuando cambies algo en el banco; mientras tanto, la app sigue usando la última descarga.</p></div>
 </section>
 
-<section id="imp" class="hide"><div class="card"><b>Importar archivos .jgd</b>
+<section id="imp" class="hide">
+<div class="card"><b>Importar archivos .jgd</b>
 <p class="mu">Ábrelos desde WhatsApp ("Compartir" → BancoPro) o elígelos aquí. Se validan al momento, sin internet.</p>
-<input type="file" id="fi" multiple><div id="res"></div></div></section>
+<input type="file" id="fi" multiple><div id="res"></div></div>
+<div class="card"><b>Ficheros cargados</b>
+<p class="mu">Lista de todos los ficheros guardados en este teléfono. Puedes ver su contenido o eliminar un fichero cargado.</p>
+<div id="imp_list"></div></div>
+</section>
+<div id="file_view" class="card hide" style="position:fixed;z-index:20;left:10px;right:10px;top:10px;bottom:10px;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b id="file_view_title">Contenido del fichero</b>
+<button class="b" id="file_view_close" style="width:auto;margin:0">Cerrar</button></div>
+<div id="file_view_info" class="mu" style="margin:8px 0"></div>
+<pre id="file_view_content" class="file-content"></pre></div>
 
 <section id="cod" class="hide"><div class="card"><b>Registrar código recibido</b>
 <p class="mu">El comercial te llama por teléfono y te dicta el código — no hace falta internet, ni de su parte ni de la tuya. Cuando más tarde descargues el archivo, se empareja solo, sin importar cuánto tiempo haya pasado.</p>
@@ -194,7 +208,7 @@ async function importar(nombre,texto){
   const m=cods.find(c=>c.estado!=="confirmado"&&[r.reg.codigo,r.reg.tel].includes(c.codigo));
   if(m){m.estado=r.reg.estado==="er"?"alterado":"confirmado";m.archivo=r.reg.nonce;m.confirmado=r.reg.importado;await put("codigos",m);r.avisos.push("Coincide con el código registrado ✔")}
   else if(cods.some(c=>c.estado==="pendiente")){r.avisos.push("Hay códigos pendientes de este comercial/fecha y ninguno coincide");if(r.reg.estado==="ok")r.reg.estado="wa"}
-  await put("archivos",{...r.reg,nombre});
+  await put("archivos",{...r.reg,nombre,contenido:texto});
  }
  pintarRes(r);await refrescar();return r}
 window.bancoImportar=(n,t)=>{show("imp");return importar(n,t)};
@@ -267,6 +281,41 @@ c_add.onclick=async()=>{
  if(!com||!fec||!/^([0-9A-F]{12}|\d{12})$/.test(cod)){c_msg.textContent="Elige comercial, fecha y un código de 12 caracteres.";return}
  await put("codigos",{comercial:com,fecha:fec,codigo:cod,estado:"pendiente",recibido:new Date().toISOString()});
  c_cod.value="";c_msg.textContent="Guardado "+new Date().toLocaleTimeString();await refrescar()};
+async function listaArchivos(){
+ const l=(await all("archivos")).sort((a,b)=>String(b.importado||"").localeCompare(String(a.importado||"")));
+ const bd=await bundle();
+ const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id||"—";
+ const box=document.getElementById("imp_list");
+ if(!l.length){box.innerHTML='<p class="mu">No hay ficheros cargados.</p>';return}
+ const estado={ok:["ok","Válido"],wa:["wa","Con avisos"],er:["er","Rechazado"],du:["wa","Duplicado"]};
+ box.innerHTML=l.map(a=>{
+  const e=estado[a.estado]||["wa",a.estado||"—"];
+  const info=`${esc(nombreCom(a.comercial_num||a.comercial))} · ${esc(a.fecha||"—")} · ${a.jugadas||0} jugadas · ${money(a.monto||0)}`;
+  return `<div class="file-row">
+   <div class="file-main"><div class="file-name" title="${esc(a.nombre||a.nonce)}">${esc(a.nombre||a.nonce||"Fichero sin nombre")}</div>
+   <div class="mu">${info} · <span class="${e[0]}">${e[1]}</span></div></div>
+   <div class="file-actions"><button class="b" data-view-file="${esc(a.nonce)}">Ver</button>
+    <button class="b" data-delete-file="${esc(a.nonce)}" style="background:var(--er)">Borrar</button></div></div>`;
+ }).join("");
+ box.querySelectorAll("[data-view-file]").forEach(btn=>btn.onclick=async()=>{
+  const a=await get("archivos",btn.dataset.viewFile);if(!a)return;
+  document.getElementById("file_view_title").textContent=a.nombre||"Contenido del fichero";
+  document.getElementById("file_view_info").textContent=`${nombreCom(a.comercial_num||a.comercial)} · ${a.fecha||"—"} · nonce ${a.nonce||"—"}`;
+  let contenido=a.contenido;
+  if(!contenido) contenido=JSON.stringify({header:{comercial_id:a.comercial,fecha_sorteo:a.fecha,codigo_verificacion:a.codigo,codigo_telefonico:a.tel,nonce:a.nonce,fecha_generacion:a.generado},resumen:{total_jugadas:a.jugadas,total_monto:a.monto},jugadas:a.jug||[]},null,2);
+  try{const parsed=typeof contenido==="string"?JSON.parse(contenido):contenido;document.getElementById("file_view_content").textContent=JSON.stringify(parsed,null,2)}
+  catch{document.getElementById("file_view_content").textContent=String(contenido||"Sin contenido disponible.")}
+  document.getElementById("file_view").classList.remove("hide");
+ });
+ box.querySelectorAll("[data-delete-file]").forEach(btn=>btn.onclick=async()=>{
+  const a=await get("archivos",btn.dataset.deleteFile);if(!a)return;
+  const nombre=a.nombre||a.nonce||"este fichero";
+  if(!confirm(`¿Eliminar el fichero cargado "${nombre}"?\\n\\nSe quitará de BancoPro y dejará de participar en el cuadre. El código registrado no se borra.`))return;
+  await del("archivos",a.nonce);await refrescar();show("imp");
+ });
+}
+document.getElementById("file_view_close").onclick=()=>document.getElementById("file_view").classList.add("hide");
+
 async function listaCodigos(){
  const l=(await all("codigos")).sort((a,b)=>b.recibido.localeCompare(a.recibido));
  const cl={pendiente:"wa",confirmado:"ok",alterado:"er"};
@@ -509,7 +558,7 @@ function show(t){document.querySelectorAll("main > section").forEach(s=>s.classL
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 async function refrescar(){
- await pintarSesion();await pintarComerciales();await listaCodigos();await listaResultados();await cuadre();
+ await pintarSesion();await pintarComerciales();await listaArchivos();await listaCodigos();await listaResultados();await cuadre();
 }
 openDB().then(async()=>{
  a_url.value=await apiUrl();
