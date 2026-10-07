@@ -278,7 +278,6 @@ document.getElementById("aud_refrescar").onclick=listaAuditoria;
 /* ---------- Importación (100% local) ---------- */
 async function importar(nombre,texto){
  const r=await validar(nombre,texto);
- await registrarAuditoria(r,nombre,texto);
  if(r.reg && r.estado!=="er" && r.estado!=="du"){
   const cods=(await all("codigos")).filter(c=>String(c.comercial)===String(r.reg.comercial_num)&&c.fecha===r.reg.fecha);
   const m=cods.find(c=>c.estado!=="confirmado"&&[r.reg.codigo,r.reg.tel].includes(c.codigo));
@@ -286,6 +285,7 @@ async function importar(nombre,texto){
   else if(cods.some(c=>c.estado==="pendiente")){r.avisos.push("Hay códigos pendientes de este comercial/fecha y ninguno coincide");if(r.reg.estado==="ok")r.reg.estado="wa"}
   await put("archivos",{...r.reg,nombre,contenido:texto});
  }
+ await registrarAuditoria(r,nombre,texto);
  pintarRes(r);await refrescar();return r}
 window.bancoImportar=(n,t)=>{show("imp");return importar(n,t)};
 function pintarRes(r){
@@ -359,7 +359,14 @@ c_add.onclick=async()=>{
  c_cod.value="";c_msg.textContent="Guardado "+new Date().toLocaleTimeString();await refrescar()};
 async function eliminarRechazadosGuardados(){
  const l=await all("archivos");
- for(const a of l)if(a.estado==="er")await del("archivos",a.nonce);
+ const aud=await all("auditoria");
+ for(const a of l)if(a.estado==="er"){
+  const existe=aud.some(x=>String(x.nonce||"")===String(a.nonce||"")&&String(x.nombre||"")===String(a.nombre||""));
+  if(!existe&&a.contenido){
+   await registrarAuditoria({estado:"er",errores:a.errores||[],avisos:a.avisos||[]},a.nombre||a.nonce,a.contenido);
+  }
+  await del("archivos",a.nonce);
+ }
 }
 async function listaArchivos(){
  await eliminarRechazadosGuardados();
