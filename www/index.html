@@ -347,12 +347,14 @@ async function pintarSesion(){
 }
 async function pintarPendientesResumen(){
  const bd=await bundle();
- const pend=await cursorIndex("codigos","estado_fecha",IDBKeyRange.bound(["pendiente","0000-01-01"],["pendiente","9999-12-31"]),Number.MAX_SAFE_INTEGER,"next");
+ const range=IDBKeyRange.bound(["pendiente","0000-01-01"],["pendiente","9999-12-31"]);
+ const total=await countIndex("codigos","estado_fecha",range);
+ const primero=total?await cursorIndex("codigos","estado_fecha",range,1,"next"):[];
  const box=document.getElementById("ses_pendientes");
- if(!pend.length){box.innerHTML='<span class="ok">✔ No hay códigos esperando archivo.</span>';return}
- const masAntiguo=pend.reduce((a,b)=>a.fecha<b.fecha?a:b);
+ if(!total){box.innerHTML='<span class="ok">✔ No hay códigos esperando archivo.</span>';return}
+ const masAntiguo=primero[0];
  const nombre=id=>comercialPorId(bd,+id)?.nombre||id;
- box.innerHTML=`<b class="wa">${pend.length} código${pend.length>1?"s":""} esperando archivo</b>`+
+ box.innerHTML=`<b class="wa">${total} código${total>1?"s":""} esperando archivo</b>`+
   `<div class="mu">El más viejo: ${esc(nombre(masAntiguo.comercial))}, del ${esc(masAntiguo.fecha)}.</div>`+
   `<a href="#" id="ses_ver_cod">Ver en Códigos →</a>`;
  document.getElementById("ses_ver_cod").onclick=e=>{e.preventDefault();show("cod")};
@@ -595,8 +597,10 @@ async function pintarFaltantes(desde,hasta){
  const hoy=new Date().toISOString().slice(0,10),ahora=Date.now();
  const dias=_modoRango?diasEntre(desde,hasta):[fec].filter(Boolean);
  const arch=await porFecha("archivos","fecha",_modoRango?desde:fec,_modoRango?hasta:fec);
- const yaTiene=(com,fecha,lot,sor)=>arch.some(a=>a.estado!=="er"&&a.comercial_num===com&&a.fecha===fecha&&String(a.loteria)===String(lot)&&String(a.sorteo)===String(sor));
+ const archivoSet=new Set(arch.filter(a=>a.estado!=="er").map(a=>[a.comercial_num,a.fecha,a.loteria,a.sorteo].join("|")));
+ const yaTiene=(com,fecha,lot,sor)=>archivoSet.has([com,fecha,lot,sor].join("|"));
  const yaAvisoCodigo=new Set(pen.map(c=>[c.comercial,c.fecha].join("|")));
+ const lotMap=new Map((bd.loterias||[]).map(l=>[String(l.id),l.nombre]));
  const faltan=[];
  for(const fecha of dias){
   if(fecha>hoy)continue;
@@ -609,7 +613,7 @@ async function pintarFaltantes(desde,hasta){
     }
     if(yaTiene(com.id,fecha,sor.loteria_id,sor.id))continue;
     if(yaAvisoCodigo.has([com.id,fecha].join("|")))continue;
-    const lotNombre=(bd.loterias||[]).find(l=>String(l.id)===String(sor.loteria_id))?.nombre||("Lot "+sor.loteria_id);
+    const lotNombre=lotMap.get(String(sor.loteria_id))||("Lot "+sor.loteria_id);
     faltan.push({com:com.nombre,fecha,lot:lotNombre,sor:sor.horario||sor.nombre||""});
    }
   }
