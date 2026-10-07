@@ -336,10 +336,11 @@ async function listaArchivos(){
   const a=await get("archivos",btn.dataset.viewFile);if(!a)return;
   document.getElementById("file_view_title").textContent=a.nombre||"Contenido del fichero";
   document.getElementById("file_view_info").textContent=nombreCom(a.comercial_num||a.comercial)+" · "+(a.fecha||"—")+" · nonce "+(a.nonce||"—");
-  let contenido=a.contenido;
-  if(!contenido)contenido=JSON.stringify({header:{comercial_id:a.comercial,fecha_sorteo:a.fecha,codigo_verificacion:a.codigo,codigo_telefonico:a.tel,nonce:a.nonce,fecha_generacion:a.generado},resumen:{total_jugadas:a.jugadas,total_monto:a.monto},jugadas:a.jug||[]},null,2);
-  try{const parsed=typeof contenido==="string"?JSON.parse(contenido):contenido;document.getElementById("file_view_content").textContent=JSON.stringify(parsed,null,2)}
-  catch{document.getElementById("file_view_content").textContent=String(contenido||"Sin contenido disponible.")}
+  let data=null;try{data=typeof a.contenido==="string"?JSON.parse(a.contenido):a.contenido}catch{}
+  const p=data?.payload||{};const js=Array.isArray(p.jugadas)?p.jugadas:(Array.isArray(a.jug)?a.jug:[]);let txt="";
+  const fch=a.fecha?String(a.fecha).split("-").reverse().join("/"):"";if(fch)txt+="Fecha: "+fch+"\\n\\n";
+  for(const j of js){const nombre=j.jugador||j.nombre||j.cliente||"";const ds=Array.isArray(j.detalles)?j.detalles:[j];for(const d of ds){if(!d)continue;let tipo=String(d.tipo||j.tipo||"").toLowerCase();if(tipo.startsWith("candado")||tipo==="parle_global")tipo="parle";let ns=Array.isArray(d.combinaciones)&&d.combinaciones.length?d.combinaciones:(Array.isArray(d.numeros)?d.numeros:[]);if(!ns.length&&d.numero!=null)ns=[d.numero];const nums=ns.map(x=>String(x).trim()).filter(Boolean).join("x");const monto=d.monto_unitario!=null&&d.monto_unitario!==""?d.monto_unitario:(d.monto!=null?d.monto:d.monto_total);let linea=(nombre?nombre+": ":"")+(nums||"—")+(tipo?" "+tipo:"")+(monto!=null&&monto!==""?" con "+String(monto):"");txt+=linea+"\\n";}}
+  document.getElementById("file_view_content").textContent=txt.trim()||"No hay jugadas para mostrar.";
   document.getElementById("file_view").classList.remove("hide");
  });
  box.querySelectorAll("[data-delete-file]").forEach(btn=>btn.onclick=async()=>{
