@@ -143,9 +143,9 @@ const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",7);
   if(!n.contains("cfg"))d.createObjectStore("cfg",{keyPath:"k"});
   if(!n.contains("auditoria"))d.createObjectStore("auditoria",{keyPath:"id",autoIncrement:true});
   if(n.contains("archivos")){const s=d.transaction.objectStore("archivos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("estado"))s.createIndex("estado","estado",{unique:false});if(!s.indexNames.contains("importado"))s.createIndex("importado","importado",{unique:false});if(!s.indexNames.contains("comercial_fecha"))s.createIndex("comercial_fecha",["comercial_num","fecha"],{unique:false})}
-  if(n.contains("codigos")){const s=d.transaction.objectStore("codigos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("recibido"))s.createIndex("recibido","recibido",{unique:false});if(!s.indexNames.contains("estado_fecha"))s.createIndex("estado_fecha",["estado","fecha"],{unique:false})}
-  if(n.contains("resultados")){const s=d.transaction.objectStore("resultados");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false})}
-  if(n.contains("auditoria")){const s=d.transaction.objectStore("auditoria");if(!s.indexNames.contains("intento"))s.createIndex("intento","intento",{unique:false})}};
+  if(n.contains("codigos")){const s=d.transaction.objectStore("codigos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("recibido"))s.createIndex("recibido","recibido",{unique:false});if(!s.indexNames.contains("estado_fecha"))s.createIndex("estado_fecha",["estado","fecha"],{unique:false});if(!s.indexNames.contains("comercial_fecha"))s.createIndex("comercial_fecha",["comercial","fecha"],{unique:false})}
+  if(n.contains("resultados")){const s=d.transaction.objectStore("resultados");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("fecha_loteria_sorteo"))s.createIndex("fecha_loteria_sorteo",["fecha","loteria","sorteo"],{unique:false})}
+  if(n.contains("auditoria")){const s=d.transaction.objectStore("auditoria");if(!s.indexNames.contains("intento"))s.createIndex("intento","intento",{unique:false});if(!s.indexNames.contains("estado_intento"))s.createIndex("estado_intento",["estado","intento"],{unique:false})}};
  r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)});
 const tx=(s,m="readonly")=>DB.transaction(s,m).objectStore(s);
 const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
@@ -171,8 +171,7 @@ async function rangoComercialArchivos(com,fecha){
 }
 async function rangoCodigoComercial(com,fecha){
  if(com==null||!fecha)return [];
- return cursorIndex("codigos","estado_fecha",IDBKeyRange.bound(["alterado",fecha],["pendiente",fecha]),Number.MAX_SAFE_INTEGER,"next")
-   .then(a=>a.filter(c=>String(c.comercial)===String(com)));
+ return cursorIndex("codigos","comercial_fecha",IDBKeyRange.only([+com,fecha]),Number.MAX_SAFE_INTEGER,"next");
 }
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>Number(n||0).toLocaleString("es",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -180,7 +179,15 @@ const apiUrl=async()=>(await get("cfg","api_url"))?.v||DEFAULT_API;
 
 /* ---------- Sesión / paquete de configuración (único uso de internet) ---------- */
 async function sesion(){return (await get("cfg","session"))?.v||null}
-async function bundle(){return (await get("cfg","bundle"))?.v||null}
+let _bundleCache=null,_bundleCacheKey="";
+async function bundle(){
+ const b=(await get("cfg","bundle"))?.v||null;
+ const k=b?String(b.generado_at||b.generado||"sin-fecha"):"";
+ if(b&&_bundleCache&&_bundleCacheKey===k)return _bundleCache;
+ _bundleCache=b;_bundleCacheKey=k;
+ return b;
+}
+function invalidarBundleCache(){_bundleCache=null;_bundleCacheKey=""}
 
 /* ---------- Cripto (idéntico al servidor / a la app del comerciante) ---------- */
 function canon(v){const t=Object.prototype.toString.call(v);
@@ -278,21 +285,20 @@ async function registrarAuditoria(r,nombre,texto){
 }
 function estadoAud(e){return e==="er"?["er","Rechazado"]:e==="du"?["wa","Duplicado"]:e==="wa"?["wa","Aceptado con avisos"]:["ok","Aceptado"]}
 async function leerAuditoriaRecientes(limite=50){
- const db=DB;
- return new Promise((resolve,reject)=>{
-  const tx=db.transaction("auditoria","readonly"),s=tx.objectStore("auditoria"),out=[];
-  const req=s.indexNames.contains("intento")?s.index("intento").openCursor(null,"prev"):s.openCursor(null,"prev");
-  req.onsuccess=()=>{const cur=req.result;if(!cur||out.length>=limite){resolve(out);return}out.push(cur.value);cur.continue()};
-  req.onerror=()=>reject(req.error);
- });
+ return cursorIndex("auditoria","intento",null,limite,"prev");
+}
+async function leerAuditoriaFiltrados(estado,limite=50){
+ if(!estado)return leerAuditoriaRecientes(limite);
+ const rango=IDBKeyRange.bound([estado,""],[estado,"\uffff"]);
+ return cursorIndex("auditoria","estado_intento",rango,limite,"prev");
 }
 async function listaAuditoria(){
  const filtro=document.getElementById("aud_filtro")?.value||"todos";
- const l=await leerAuditoriaRecientes(50);
- const v=filtro==="todos"?l:l.filter(a=>a.estado===filtro);
+ const l=filtro==="todos"?await leerAuditoriaRecientes(50):await leerAuditoriaFiltrados(filtro,50);
+ const v=l;
  const res=document.getElementById("aud_resumen"),box=document.getElementById("aud_list");
  const rechazados=l.filter(a=>a.estado==="er").length,aceptados=l.filter(a=>a.estado==="ok"||a.estado==="wa").length,duplicados=l.filter(a=>a.estado==="du").length;
- res.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag er">Rechazados recientes: '+rechazados+'</span><span class="tag ok">Aceptados recientes: '+aceptados+'</span><span class="tag wa">Duplicados recientes: '+duplicados+'</span><span class="mu" style="padding:3px 0">Mostrando los últimos '+l.length+' intentos (máximo 50)</span></div>';
+ res.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag er">Rechazados en esta vista: '+rechazados+'</span><span class="tag ok">Aceptados en esta vista: '+aceptados+'</span><span class="tag wa">Duplicados en esta vista: '+duplicados+'</span><span class="mu" style="padding:3px 0">Mostrando hasta '+l.length+' registros de esta consulta (máximo 50)</span></div>';
  if(!v.length){box.innerHTML='<p class="mu">No hay registros de auditoría recientes.</p>';return}
  box.innerHTML=v.map(a=>{
   const e=estadoAud(a.estado),mot=[...(a.errores||[]),...(a.avisos||[])],hora=a.intento?new Date(a.intento).toLocaleString():"—";
@@ -369,7 +375,7 @@ l_go.onclick=async()=>{
   l_msg.textContent="";l_pass.value="";await refrescar();await descargarConfig()
  }catch(e){l_msg.textContent="Sin conexión ahora. Intenta cuando tengas señal, aunque sea un momento."}
 };
-async function cerrarSesion(){await del("cfg","session");await del("cfg","bundle");await refrescar()}
+async function cerrarSesion(){await del("cfg","session");await del("cfg","bundle");invalidarBundleCache();await refrescar()}
 a_logout.onclick=async()=>{if(confirm("¿Borrar sesión y configuración descargada de este teléfono? Los archivos, códigos y resultados guardados NO se borran.")){await cerrarSesion()}};
 
 async function descargarConfig(){
@@ -379,7 +385,7 @@ async function descargarConfig(){
   const r=await fetch((await apiUrl())+"?action=banca_get_paquete_offline",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+s.token},body:"{}"});
   const d=await r.json();
   if(!d.ok){b_msg.textContent="Error: "+(d.error||"no se pudo descargar. Verifica que la acción banca_get_paquete_offline esté agregada en el servidor.");return}
-  await put("cfg",{k:"bundle",v:d});b_msg.textContent="Listo. Ya puedes trabajar sin conexión.";await refrescar();
+  await put("cfg",{k:"bundle",v:d});invalidarBundleCache();b_msg.textContent="Listo. Ya puedes trabajar sin conexión.";await refrescar();
  }catch(e){b_msg.textContent="Sin conexión ahora mismo. La app sigue usando la configuración anterior."}
 }
 b_dl.onclick=descargarConfig;
@@ -398,11 +404,15 @@ c_add.onclick=async()=>{
  await put("codigos",{comercial:com,fecha:fec,codigo:cod,estado:"pendiente",recibido:new Date().toISOString()});
  c_cod.value="";c_msg.textContent="Guardado "+new Date().toLocaleTimeString();await refrescar()};
 async function eliminarRechazadosGuardados(){
+ const migrado=await get("cfg","legacy_rejections_migrated");
+ if(migrado?.v)return;
  const l=await cursorIndex("archivos","estado",IDBKeyRange.only("er"),Number.MAX_SAFE_INTEGER,"next");
  for(const a of l){
   if(a.contenido)await registrarAuditoria({estado:"er",errores:a.errores||[],avisos:a.avisos||[]},a.nombre||a.nonce,a.contenido);
   await del("archivos",a.nonce);
- }}
+ }
+ await put("cfg",{k:"legacy_rejections_migrated",v:true});
+}
 async function listaArchivos(){
  await eliminarRechazadosGuardados();
  const l=await recientes("archivos","importado",100);
