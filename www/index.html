@@ -18,9 +18,15 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 .tbl{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:7px 8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
 .r{text-align:right}.hide{display:none}.banner{padding:8px 10px;border-radius:9px;font-size:13px;margin-bottom:8px}
 .banner.wa{background:color-mix(in srgb,var(--wa) 15%,transparent)}
-.file-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)}
-.file-main{min-width:0;flex:1}.file-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.file-actions{display:flex;gap:6px;flex:0 0 auto}.file-actions button{width:auto;margin:0;padding:7px 9px}
+.file-group{border:1px solid var(--bd);border-radius:10px;margin:8px 0;overflow:hidden;background:var(--card)}
+.file-group summary{list-style:none;cursor:pointer;padding:10px 12px;display:flex;align-items:center;gap:10px;font-weight:650}
+.file-group summary::-webkit-details-marker{display:none}.file-group summary:before{content:"›";font-size:20px;line-height:12px;color:var(--mu);transition:transform .15s}
+.file-group[open] summary:before{transform:rotate(90deg)}
+.file-group-main{min-width:0;flex:1}.file-group-title{display:block}.file-group-meta{display:block;margin-top:2px}
+.file-badge{display:inline-block;padding:3px 7px;border-radius:99px;background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac);font-size:11px;font-weight:700;white-space:nowrap}
+.file-item{padding:9px 12px;border-top:1px solid var(--bd)}.file-item-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.file-name{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-meta{margin-top:2px}.file-actions{display:flex;gap:6px;flex:0 0 auto}.file-actions button{width:auto;margin:0;padding:6px 8px}
 .file-content{white-space:pre-wrap;word-break:break-word;max-height:60vh;overflow:auto;background:var(--bg);border:1px solid var(--bd);border-radius:9px;padding:10px;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
 .faltantes-date{margin:0 0 12px}.faltantes-date-title{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;padding:2px 0 8px}.faltantes-date-count{font-size:12px;color:var(--mu);font-weight:500}.faltantes-com{border:1px solid var(--bd);border-radius:10px;margin:8px 0;overflow:hidden;background:var(--card)}.faltantes-com summary{list-style:none;cursor:pointer;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:650}.faltantes-com summary::-webkit-details-marker{display:none}.faltantes-com summary:before{content:"›";font-size:20px;line-height:12px;color:var(--mu);transition:transform .15s}.faltantes-com[open] summary:before{transform:rotate(90deg)}.faltantes-com-main{min-width:0;flex:1}.faltantes-com-name{display:block}.faltantes-com-meta{display:block;margin-top:2px}.faltantes-badge{display:inline-block;padding:3px 7px;border-radius:99px;background:color-mix(in srgb,var(--er) 12%,transparent);color:var(--er);font-size:11px;font-weight:700;white-space:nowrap}.faltantes-detail{padding:0 12px 10px}.faltantes-lot{padding:7px 0;border-top:1px solid var(--bd)}.faltantes-lot:first-child{border-top:0}.faltantes-lot-name{font-weight:600}.faltantes-sorteos{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}.faltantes-sorteo{padding:3px 7px;border:1px solid var(--bd);border-radius:7px;font-size:12px}.faltantes-codigo{margin-bottom:12px}.faltantes-empty{padding:8px 0}.faltantes-section-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 </style></head><body>
@@ -286,17 +292,43 @@ async function listaArchivos(){
  const l=(await all("archivos")).sort((a,b)=>String(b.importado||"").localeCompare(String(a.importado||"")));
  const bd=await bundle();
  const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id||"—";
+ const nombreLot=id=>(bd?.loterias||[]).find(x=>String(x.id)===String(id))?.nombre||("Lotería "+(id||"—"));
+ const nombreSor=id=>(bd?.sorteos||[]).find(x=>String(x.id)===String(id))?.nombre||("Sorteo "+(id||"—"));
  const box=document.getElementById("imp_list");
  if(!l.length){box.innerHTML='<p class="mu">No hay ficheros cargados.</p>';return}
  const estado={ok:["ok","Válido"],wa:["wa","Con avisos"],er:["er","Rechazado"],du:["wa","Duplicado"]};
- box.innerHTML=l.map(a=>{
-  const e=estado[a.estado]||["wa",a.estado||"—"];
-  const info=`${esc(nombreCom(a.comercial_num||a.comercial))} · ${esc(a.fecha||"—")} · ${a.jugadas||0} jugadas · ${money(a.monto||0)}`;
-  return `<div class="file-row">
-   <div class="file-main"><div class="file-name" title="${esc(a.nombre||a.nonce)}">${esc(a.nombre||a.nonce||"Fichero sin nombre")}</div>
-   <div class="mu">${info} · <span class="${e[0]}">${e[1]}</span></div></div>
-   <div class="file-actions"><button class="b" data-view-file="${esc(a.nonce)}">Ver</button>
-    <button class="b" data-delete-file="${esc(a.nonce)}" style="background:var(--er)">Borrar</button></div></div>`;
+ const fechas={};
+ for(const a of l){
+  const fecha=a.fecha||"—";
+  (fechas[fecha]??=[]).push(a);
+ }
+ const fechaKeys=Object.keys(fechas).sort((a,b)=>b.localeCompare(a));
+ box.innerHTML=fechaKeys.map(fecha=>{
+  const files=fechas[fecha];
+  const comerciales={};
+  for(const a of files){
+   const id=String(a.comercial_num??a.comercial??"");
+   (comerciales[id]??={id,nombre:nombreCom(a.comercial_num||a.comercial),files:[]}).files.push(a);
+  }
+  const grupos=Object.values(comerciales).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  return `<details class="file-group">
+   <summary><span class="file-group-main"><span class="file-group-title">📅 ${esc(fecha)}</span><span class="mu file-group-meta">${files.length} fichero${files.length===1?"":"s"} · ${grupos.length} comercial${grupos.length===1?"":"es"}</span></span><span class="file-badge">${files.length}</span></summary>
+   <div class="faltantes-detail">${grupos.map(g=>{
+    const porLoteria={};
+    for(const a of g.files){
+     const lot=String(a.loteria??"");
+     (porLoteria[lot]??=[]).push(a);
+    }
+    return `<details class="file-group">
+     <summary><span class="file-group-main"><span class="file-group-title">${esc(g.nombre)}</span><span class="mu file-group-meta">${g.files.length} fichero${g.files.length===1?"":"s"}</span></span><span class="file-badge">${g.files.length}</span></summary>
+     <div class="faltantes-detail">${Object.values(porLoteria).sort((a,b)=>nombreLot(a[0].loteria).localeCompare(nombreLot(b[0].loteria))).map(fs=>{
+      return fs.slice().sort((a,b)=>String(a.sorteo).localeCompare(String(b.sorteo))).map(a=>{
+       const e=estado[a.estado]||["wa",a.estado||"—"];
+       return `<div class="file-item"><div class="file-item-head"><div class="file-name" title="${esc(a.nombre||a.nonce)}">${esc(a.nombre||a.nonce||"Fichero sin nombre")}</div><span class="tag ${e[0]}">${e[1]}</span></div><div class="mu file-meta">${esc(nombreLot(a.loteria))} · ${esc(nombreSor(a.sorteo))} · ${a.jugadas||0} jugadas · ${money(a.monto||0)}</div><div class="file-actions"><button class="b" data-view-file="${esc(a.nonce)}">Ver contenido</button><button class="b" data-delete-file="${esc(a.nonce)}" style="background:var(--er)">Borrar</button></div></div>`;
+      }).join("");
+     }).join("")}</div></details>`;
+   }).join("")}</div></details>`;
+  }).join("")}</div>`;
  }).join("");
  box.querySelectorAll("[data-view-file]").forEach(btn=>btn.onclick=async()=>{
   const a=await get("archivos",btn.dataset.viewFile);if(!a)return;
@@ -315,8 +347,6 @@ async function listaArchivos(){
   await del("archivos",a.nonce);await refrescar();show("imp");
  });
 }
-document.getElementById("file_view_close").onclick=()=>document.getElementById("file_view").classList.add("hide");
-
 async function listaCodigos(){
  const l=(await all("codigos")).sort((a,b)=>b.recibido.localeCompare(a.recibido));
  const cl={pendiente:"wa",confirmado:"ok",alterado:"er"};
