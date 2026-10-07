@@ -135,18 +135,39 @@ const DEFAULT_API = "https://www.lotfast.x10.mx/licencias/api.php";
 
 /* ---------- IndexedDB ---------- */
 let DB;
-const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",5);
+const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",6);
  r.onupgradeneeded=()=>{const d=r.result,n=d.objectStoreNames;
   if(!n.contains("archivos"))d.createObjectStore("archivos",{keyPath:"nonce"});
   if(!n.contains("codigos"))d.createObjectStore("codigos",{keyPath:"id",autoIncrement:true});
   if(!n.contains("resultados"))d.createObjectStore("resultados",{keyPath:"key"});
   if(!n.contains("cfg"))d.createObjectStore("cfg",{keyPath:"k"});
   if(!n.contains("auditoria"))d.createObjectStore("auditoria",{keyPath:"id",autoIncrement:true});
+  if(n.contains("archivos")){const s=d.transaction.objectStore("archivos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("importado"))s.createIndex("importado","importado",{unique:false});if(!s.indexNames.contains("comercial_fecha"))s.createIndex("comercial_fecha",["comercial_num","fecha"],{unique:false})}
+  if(n.contains("codigos")){const s=d.transaction.objectStore("codigos");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false});if(!s.indexNames.contains("recibido"))s.createIndex("recibido","recibido",{unique:false});if(!s.indexNames.contains("estado_fecha"))s.createIndex("estado_fecha",["estado","fecha"],{unique:false})}
+  if(n.contains("resultados")){const s=d.transaction.objectStore("resultados");if(!s.indexNames.contains("fecha"))s.createIndex("fecha","fecha",{unique:false})}
   if(n.contains("auditoria")){const s=d.transaction.objectStore("auditoria");if(!s.indexNames.contains("intento"))s.createIndex("intento","intento",{unique:false})}};
  r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)});
 const tx=(s,m="readonly")=>DB.transaction(s,m).objectStore(s);
 const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const all=s=>rq(tx(s).getAll()),get=(s,k)=>rq(tx(s).get(k)),put=(s,v)=>rq(tx(s,"readwrite").put(v)),del=(s,k)=>rq(tx(s,"readwrite").delete(k));
+function cursorIndex(store,index,range,limit=100,dir="prev"){
+ const db=DB;return new Promise((resolve,reject)=>{const t=db.transaction(store,"readonly"),s=t.objectStore(store),idx=s.index(index),out=[];
+  const req=idx.openCursor(range??null,dir);
+  req.onsuccess=()=>{const cur=req.result;if(!cur||out.length>=limit){resolve(out);return}out.push(cur.value);cur.continue()};
+  req.onerror=()=>reject(req.error);
+ });
+}
+async function recientes(store,index,limit=100){return cursorIndex(store,index,null,limit,"prev")}
+async function porFecha(store,index,desde,hasta){
+ if(!desde&&!hasta)return recientes(store,index,100);
+ const lo=desde||"0000-01-01",hi=hasta||"9999-12-31";
+ return cursorIndex(store,index,IDBKeyRange.bound(lo,hi),Number.MAX_SAFE_INTEGER,"next");
+}
+async function rangoComercialArchivos(com,fecha){
+ if(com==null)return [];
+ if(fecha)return cursorIndex("archivos","comercial_fecha",IDBKeyRange.only([+com,fecha]),Number.MAX_SAFE_INTEGER,"next");
+ return cursorIndex("archivos","comercial_fecha",IDBKeyRange.bound([+com,"0000-01-01"],[+com,"9999-12-31"]),Number.MAX_SAFE_INTEGER,"next");
+}
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>Number(n||0).toLocaleString("es",{minimumFractionDigits:2,maximumFractionDigits:2});
 const apiUrl=async()=>(await get("cfg","api_url"))?.v||DEFAULT_API;
@@ -370,18 +391,13 @@ c_add.onclick=async()=>{
  c_cod.value="";c_msg.textContent="Guardado "+new Date().toLocaleTimeString();await refrescar()};
 async function eliminarRechazadosGuardados(){
  const l=await all("archivos");
- const aud=await all("auditoria");
  for(const a of l)if(a.estado==="er"){
-  const existe=aud.some(x=>String(x.nonce||"")===String(a.nonce||"")&&String(x.nombre||"")===String(a.nombre||""));
-  if(!existe&&a.contenido){
-   await registrarAuditoria({estado:"er",errores:a.errores||[],avisos:a.avisos||[]},a.nombre||a.nonce,a.contenido);
-  }
+  if(a.contenido)await registrarAuditoria({estado:"er",errores:a.errores||[],avisos:a.avisos||[]},a.nombre||a.nonce,a.contenido);
   await del("archivos",a.nonce);
- }
-}
+ }}
 async function listaArchivos(){
  await eliminarRechazadosGuardados();
- const l=(await all("archivos")).sort((a,b)=>String(b.importado||"").localeCompare(String(a.importado||"")));
+ const l=await recientes("archivos","importado",100);
  const bd=await bundle();
  const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id||"—";
  const nombreLot=id=>(bd?.loterias||[]).find(x=>String(x.id)===String(id))?.nombre||("Lotería "+(id||"—"));
@@ -443,7 +459,7 @@ async function listaArchivos(){
  });
 }
 async function listaCodigos(){
- const l=(await all("codigos")).sort((a,b)=>b.recibido.localeCompare(a.recibido));
+ const l=await recientes("codigos","recibido",100);
  const cl={pendiente:"wa",confirmado:"ok",alterado:"er"};
  const bd=await bundle();const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id;
  c_list.innerHTML=l.length?"<table>"+l.map(c=>`<tr><td>${esc(nombreCom(c.comercial))}</td><td>${esc(c.fecha)}</td><td>${esc(c.codigo)}</td><td class="${cl[c.estado]}">${c.estado}</td><td><a href="#" data-d="${c.id}">borrar</a></td></tr>`).join("")+"</table>":'<p class="mu">Sin códigos.</p>';
@@ -456,7 +472,7 @@ r_add.onclick=async()=>{const num=r_num.value.replace(/\s/g,""),f=r_fec.value,l=
  if(!f||!l||!so||!/^\d{7}$/.test(num)&&!(/^\d{3}$|^\d{5}$/.test(num)&&confirm("El número no tiene 7 dígitos. ¿Guardar así?")))return alert("Completa fecha, lotería, sorteo y un número ganador válido.");
  await put("resultados",{key:[f,l,so].join("|"),fecha:f,loteria:l,sorteo:so,numero:num,registrado:new Date().toISOString()});r_num.value="";r_hint.textContent="";refrescar()};
 async function listaResultados(){
- const rs=(await all("resultados")).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+ const rs=await recientes("resultados","fecha",100);
  const bd=await bundle();const nomLot=id=>(bd?.loterias||[]).find(l=>String(l.id)===String(id))?.nombre||("Lot "+id);
  const nomSor=id=>(bd?.sorteos||[]).find(s=>String(s.id)===String(id))?.nombre||("Sor "+id);
  r_list.innerHTML=rs.length?"<table>"+rs.map(r=>`<tr><td>${esc(r.fecha)}</td><td>${esc(nomLot(r.loteria))}</td><td>${esc(nomSor(r.sorteo))}</td><td><b>${esc(r.numero)}</b></td><td><a href="#" data-r="${esc(r.key)}">borrar</a></td></tr>`).join("")+"</table>":'<p class="mu">Sin resultados.</p>';
@@ -509,9 +525,10 @@ let _modoRango=false;
 function enRango(fecha,desde,hasta){if(desde&&fecha<desde)return false;if(hasta&&fecha>hasta)return false;return true}
 async function cuadre(){
  const fec=q_fec.value,desde=q_desde.value,hasta=q_hasta.value,bd=await bundle();
- const res=Object.fromEntries((await all("resultados")).map(r=>[r.key,r]));
- const conf=new Set((await all("codigos")).filter(c=>c.estado==="confirmado").map(c=>c.archivo));
- const arch=(await all("archivos")).filter(a=>a.estado!=="er"&&(_modoRango?enRango(a.fecha,desde,hasta):(!fec||a.fecha===fec)));
+ const res=Object.fromEntries((await porFecha("resultados","fecha",_modoRango?desde:fec,_modoRango?hasta:fec)).map(r=>[r.key,r]));
+ const codFecha=await porFecha("codigos","fecha",_modoRango?desde:fec,_modoRango?hasta:fec);
+ const conf=new Set(codFecha.filter(c=>c.estado==="confirmado").map(c=>c.archivo));
+ const arch=(await porFecha("archivos","fecha",_modoRango?desde:fec,_modoRango?hasta:fec)).filter(a=>a.estado!=="er");
  const g={};for(const a of arch)(g[[a.comercial_num,a.fecha,a.loteria,a.sorteo].join("|")]??=[]).push(a);
  const por={};
  for(const l of Object.values(g)){
@@ -548,7 +565,7 @@ async function cuadre(){
       el banco no tiene ninguna señal todavía de ese sorteo. */
 async function pintarFaltantes(desde,hasta){
  const bd=await bundle(),fec=q_fec.value;
- const pen=(await all("codigos")).filter(c=>c.estado==="pendiente"&&(_modoRango?enRango(c.fecha,desde,hasta):(!fec||c.fecha===fec)));
+ const pen=(await porFecha("codigos","fecha",_modoRango?desde:fec,_modoRango?hasta:fec)).filter(c=>c.estado==="pendiente");
  const nombreCom=id=>comercialPorId(bd,+id)?.nombre||id||"—";
 
  /* Códigos pendientes: también agrupados por fecha y comercial. */
@@ -571,7 +588,7 @@ async function pintarFaltantes(desde,hasta){
  }
  const hoy=new Date().toISOString().slice(0,10),ahora=Date.now();
  const dias=_modoRango?diasEntre(desde,hasta):[fec].filter(Boolean);
- const arch=await all("archivos");
+ const arch=await porFecha("archivos","fecha",_modoRango?desde:fec,_modoRango?hasta:fec);
  const yaTiene=(com,fecha,lot,sor)=>arch.some(a=>a.estado!=="er"&&a.comercial_num===com&&a.fecha===fecha&&String(a.loteria)===String(lot)&&String(a.sorteo)===String(sor));
  const yaAvisoCodigo=new Set(pen.map(c=>[c.comercial,c.fecha].join("|")));
  const faltan=[];
@@ -646,9 +663,10 @@ async function textoCuadreComercial(comId){
  const bd=await bundle();if(!bd||!comId)return"";
  const com=comercialPorId(bd,+comId);if(!com)return"";
  const fec=q_fec.value;
- const res=Object.fromEntries((await all("resultados")).map(r=>[r.key,r]));
- const conf=new Set((await all("codigos")).filter(c=>c.estado==="confirmado").map(c=>c.archivo));
- const arch=(await all("archivos")).filter(a=>a.estado!=="er"&&a.comercial_num===+comId&&(!fec||a.fecha===fec));
+ const res=Object.fromEntries((await porFecha("resultados","fecha",fec,fec)).map(r=>[r.key,r]));
+ const codFecha=await porFecha("codigos","fecha",fec,fec);
+ const conf=new Set(codFecha.filter(c=>c.estado==="confirmado").map(c=>c.archivo));
+ const arch=(await rangoComercialArchivos(comId,fec)).filter(a=>a.estado!=="er");
  const g={};for(const a of arch)(g[[a.loteria,a.sorteo].join("|")]??=[]).push(a);
  // Orden: loterías en el orden del catálogo, y dentro de cada una por hora del sorteo
  const ordenLot=(bd.loterias||[]).map(l=>String(l.id));
@@ -712,11 +730,12 @@ a_save.onclick=async()=>{await put("cfg",{k:"api_url",v:a_url.value.trim()||DEFA
 /* ---------- Navegación ---------- */
 function show(t){document.querySelectorAll("main > section").forEach(s=>s.classList.toggle("hide",s.id!==t));
  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
- if(t==="aud")listaAuditoria()}
+ if(t==="aud")listaAuditoria();if(t==="cua")cuadre()}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 async function refrescar(){
- await pintarSesion();await pintarComerciales();await listaArchivos();await listaCodigos();await listaResultados();await cuadre();
+ await pintarSesion();await pintarComerciales();await listaArchivos();await listaCodigos();await listaResultados();
+ if(document.getElementById("cua")&&!document.getElementById("cua").classList.contains("hide"))await cuadre();
 }
 openDB().then(async()=>{
  a_url.value=await apiUrl();
