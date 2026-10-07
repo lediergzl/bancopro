@@ -203,7 +203,23 @@ function telefonico(sigBytes){let n=0n;for(const b of sigBytes.slice(0,6))n=(n<<
 function parseComercialId(str){str=String(str||"").trim();let m=str.match(/^COM-(\d+)$/i);if(m)return+m[1];if(/^\d+$/.test(str))return+str;return null}
 
 /* ---------- Datos derivados de la configuración descargada ---------- */
-function comercialPorId(bd,id){return (bd?.comerciales||[]).find(c=>c.id===id)}
+const _bdDerivados=new WeakMap();
+function bdDerivados(bd){
+ if(!bd||typeof bd!=="object")return null;
+ let d=_bdDerivados.get(bd);if(d)return d;
+ const comerciales=new Map((bd.comerciales||[]).map(c=>[String(c.id),c]));
+ const sorteos=new Map((bd.sorteos||[]).map(s=>[String(s.loteria_id)+"|"+String(s.id),s]));
+ const loterias=new Map((bd.loterias||[]).map(l=>[String(l.id),l]));
+ const limitados=new Map();
+ for(const r of (bd.numeros_limitados||[])){
+  const k=String(r.numero);
+  const a=limitados.get(k)||[];a.push(r);limitados.set(k,a);
+ }
+ d={comerciales,sorteos,loterias,limitados};_bdDerivados.set(bd,d);return d;
+}
+function comercialPorId(bd,id){return bdDerivados(bd)?.comerciales.get(String(id))}
+function loteriaPorId(bd,id){return bdDerivados(bd)?.loterias.get(String(id))}
+function sorteoPorClave(bd,lot,sor){return bdDerivados(bd)?.sorteos.get(String(lot)+"|"+String(sor))}
 // Los pagos y límites del banco están separados por moneda (cup/mlc/usd/eur),
 // tal como los guarda el panel web (MONEDAS x TIPOS). Cada jugada trae su
 // propia moneda (o "cup" si no la trae, igual que hace la app del comerciante).
@@ -214,7 +230,7 @@ function comisionEfectiva(bd,com,loteriaId){
  if(com?.porcentaje!=null)return com.porcentaje;
  const pl=com?.porcentaje_por_loteria?.[String(loteriaId)];if(pl!=null)return pl;
  return bd?.config?.porcentaje!=null?bd.config.porcentaje:0}
-function sorteoDe(bd,lot,sor){return (bd?.sorteos||[]).find(s=>String(s.loteria_id)===String(lot)&&String(s.id)===String(sor))}
+function sorteoDe(bd,lot,sor){return sorteoPorClave(bd,lot,sor)}
 
 /* ---------- Validación de un .jgd (todo local, sin llamar al servidor) ---------- */
 async function validar(nombre,texto){
@@ -504,7 +520,7 @@ function pares(f,c1,c2){const p=[];if(f&&c1)p.push(f+c1,c1+f);if(f&&c2)p.push(f+
 // Las reglas de numeros_limitados no distinguen moneda en el panel; se
 // aplican igual sobre el pago base ya resuelto para la moneda de la jugada.
 function pagoNumero(bd,com,loteriaId,sorteoId,numero,tipo,base){
- const nl=(bd?.numeros_limitados||[]).filter(r=>r.numero===numero&&(!r.loteria_id||String(r.loteria_id)===String(loteriaId))&&(!r.sorteo_id||String(r.sorteo_id)===String(sorteoId)));
+ const nl=(bdDerivados(bd)?.limitados.get(String(numero))||[]).filter(r=>!r.loteria_id||String(r.loteria_id)===String(loteriaId)).filter(r=>!r.sorteo_id||String(r.sorteo_id)===String(sorteoId));
  for(const r of nl){
   if(r.pago_por_tipo&&r.pago_por_tipo[tipo]!=null)return+r.pago_por_tipo[tipo];
   if(r.categoria_jugada&&r.categoria_jugada!==tipo)continue;
@@ -702,7 +718,7 @@ async function textoCuadreComercial(comId){
  for(const k of claves){
   const [lot,sor]=k.split("|");
   const l=g[k].slice().sort((x,y)=>(conf.has(y.nonce)-conf.has(x.nonce))||String(y.generado).localeCompare(String(x.generado)))[0];
-  const lotNombre=(bd.loterias||[]).find(x=>String(x.id)===lot)?.nombre||("Lot "+lot);
+  const lotNombre=loteriaPorId(bd,lot)?.nombre||("Lot "+lot);
   const sorteo=sorteoDe(bd,lot,sor);
   const total=l.monto,pct=comisionEfectiva(bd,com,lot),porciento=total*pct/100,limpio=total-porciento;
   const r=res[[l.fecha,lot,sor].join("|")];
