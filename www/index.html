@@ -34,7 +34,7 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <nav>
 <button data-t="ses" class="on">Configuración</button><button data-t="imp">Importar</button>
 <button data-t="cod">Códigos</button><button data-t="res">Resultados</button>
-<button data-t="cua">Cuadre</button><button data-t="aju">Ajustes</button>
+<button data-t="cua">Cuadre</button><button data-t="aud">Auditoría</button><button data-t="aju">Ajustes</button>
 </nav>
 <main>
 
@@ -108,6 +108,21 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 </div>
 </div></section>
 
+<section id="aud" class="hide">
+<div class="card">
+<b>Auditoría de ficheros</b>
+<p class="mu">Aquí quedan registrados los intentos de importación, incluidos los ficheros rechazados. Un rechazo no entra en "Ficheros cargados", pero su evidencia permanece aquí.</p>
+<div id="aud_resumen"></div>
+</div>
+<div class="card">
+<div style="display:flex;gap:6px;margin-bottom:8px">
+ <select id="aud_filtro" style="margin:0;flex:1"><option value="todos">Todos</option><option value="er">Rechazados</option><option value="ok">Aceptados</option><option value="wa">Aceptados con avisos</option><option value="du">Duplicados</option></select>
+ <button class="b" id="aud_refrescar" style="width:auto;margin:0">Actualizar</button>
+</div>
+<div id="aud_list"></div>
+</div>
+</section>
+
 <section id="aju" class="hide"><div class="card"><b>Servidor (solo para la descarga de configuración)</b>
 <input id="a_url" placeholder="https://tu-dominio/licencias/api.php">
 <button class="b" id="a_save">Guardar</button></div>
@@ -120,12 +135,12 @@ const DEFAULT_API = "https://www.lotfast.x10.mx/licencias/api.php";
 
 /* ---------- IndexedDB ---------- */
 let DB;
-const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",4);
+const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",5);
  r.onupgradeneeded=()=>{const d=r.result,n=d.objectStoreNames;
   if(!n.contains("archivos"))d.createObjectStore("archivos",{keyPath:"nonce"});
   if(!n.contains("codigos"))d.createObjectStore("codigos",{keyPath:"id",autoIncrement:true});
   if(!n.contains("resultados"))d.createObjectStore("resultados",{keyPath:"key"});
-  if(!n.contains("cfg"))d.createObjectStore("cfg",{keyPath:"k"});};
+  if(!n.contains("cfg"))d.createObjectStore("cfg",{keyPath:"k"});\n  if(!n.contains("auditoria"))d.createObjectStore("auditoria",{keyPath:"id",autoIncrement:true});};
  r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)});
 const tx=(s,m="readonly")=>DB.transaction(s,m).objectStore(s);
 const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
@@ -207,9 +222,62 @@ async function validar(nombre,texto){
   estado:out.estado,avisos:out.avisos,errores:out.errores,generado:h.fecha_generacion,importado:new Date().toISOString(),jug:p.jugadas};
  return out}
 
+/* ---------- Auditoría de importaciones (evidencia local) ---------- */
+async function registrarAuditoria(r,nombre,texto){
+ const ahora=new Date().toISOString();
+ let a=null;try{a=JSON.parse(texto)}catch{}
+ const h=a?.header||{},p=a?.payload||{};
+ let hashArchivo="";try{hashArchivo=await sha256(texto)}catch{}
+ let hashContenido="";if(p&&Array.isArray(p.jugadas)){try{hashContenido=await sha256(canon(p))}catch{}}
+ const bd=await bundle(),comId=parseComercialId(h.comercial_id),com=comId!=null?comercialPorId(bd,comId):null;
+ const lot=p?.jugadas?.[0]?.loteria_id??"",sor=p?.jugadas?.[0]?.sorteo_id??"";
+ let suma=0;if(Array.isArray(p?.jugadas))suma=Math.round(p.jugadas.reduce((s,j)=>s+Math.round((j.monto_total||0)*100),0))/100;
+ let sigTel="";if(h.firma){try{sigTel=telefonico(b64b(h.firma))}catch{}}
+ const rec={
+  id:ahora+"-"+Math.random().toString(36).slice(2,10),intento:ahora,estado:r.estado||"er",
+  resultado:r.estado==="er"?"RECHAZADO":r.estado==="du"?"DUPLICADO":(r.estado==="wa"?"ACEPTADO CON AVISOS":"ACEPTADO"),
+  nombre,comercial:h.comercial_id??"",comercial_num:comId,comercial_nombre:com?.nombre||"",
+  fecha_sorteo:h.fecha_sorteo??"",fecha_generacion:h.fecha_generacion??"",nonce:h.nonce??"",
+  loteria:lot,sorteo:sor,jugadas:Array.isArray(p?.jugadas)?p.jugadas.length:0,monto:suma,
+  hash_archivo:hashArchivo,hash_declarado:h.hash_contenido??"",hash_calculado:hashContenido,
+  codigo_declarado:h.codigo_verificacion??"",codigo_calculado:hashContenido?hashContenido.slice(0,12).toUpperCase():"",
+  codigo_telefonico_declarado:h.codigo_telefonico??"",codigo_telefonico_calculado:sigTel,
+  firma:h.firma??"",errores:[...(r.errores||[])],avisos:[...(r.avisos||[])],contenido:texto
+ };
+ await put("auditoria",rec);
+ return rec;
+}
+function estadoAud(e){return e==="er"?["er","Rechazado"]:e==="du"?["wa","Duplicado"]:e==="wa"?["wa","Aceptado con avisos"]:["ok","Aceptado"]}
+async function listaAuditoria(){
+ const l=(await all("auditoria")).sort((a,b)=>String(b.intento).localeCompare(String(a.intento)));
+ const filtro=document.getElementById("aud_filtro")?.value||"todos",v=filtro==="todos"?l:l.filter(a=>a.estado===filtro);
+ const res=document.getElementById("aud_resumen"),box=document.getElementById("aud_list");
+ const rechazados=l.filter(a=>a.estado==="er").length,aceptados=l.filter(a=>a.estado==="ok"||a.estado==="wa").length,duplicados=l.filter(a=>a.estado==="du").length;
+ res.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag er">Rechazados: '+rechazados+'</span><span class="tag ok">Aceptados: '+aceptados+'</span><span class="tag wa">Duplicados: '+duplicados+'</span><span class="mu" style="padding:3px 0">Intentos totales: '+l.length+'</span></div>';
+ if(!v.length){box.innerHTML='<p class="mu">No hay registros de auditoría.</p>';return}
+ box.innerHTML=v.map(a=>{
+  const e=estadoAud(a.estado),mot=[...(a.errores||[]),...(a.avisos||[])],hora=a.intento?new Date(a.intento).toLocaleString():"—";
+  return '<details class="file-group"><summary><span class="file-group-main"><span class="file-group-title">'+esc(a.resultado)+' · '+esc(a.nombre||"Fichero sin nombre")+'</span><span class="mu file-group-meta">'+esc(a.comercial_nombre||a.comercial||"Comercial desconocido")+' · '+esc(a.fecha_sorteo||"sin fecha")+' · '+esc(hora)+'</span></span><span class="tag '+e[0]+'">'+e[1]+'</span></summary><div class="faltantes-detail">'+
+   '<div class="file-meta"><b>Comercial:</b> '+esc(a.comercial_nombre||a.comercial||"—")+' · <b>Nonce:</b> '+esc(a.nonce||"—")+'</div>'+
+   '<div class="file-meta"><b>Hash del fichero recibido:</b><br><code>'+esc(a.hash_archivo||"—")+'</code></div>'+
+   '<div class="file-meta"><b>Hash declarado:</b><br><code>'+esc(a.hash_declarado||"—")+'</code></div>'+
+   '<div class="file-meta"><b>Hash calculado del contenido:</b><br><code>'+esc(a.hash_calculado||"—")+'</code></div>'+
+   '<div class="file-meta"><b>Código:</b> '+esc(a.codigo_declarado||"—")+' · calculado: '+esc(a.codigo_calculado||"—")+'</div>'+
+   '<div class="file-meta"><b>Código telefónico:</b> '+esc(a.codigo_telefonico_declarado||"—")+' · calculado: '+esc(a.codigo_telefonico_calculado||"—")+'</div>'+
+   (a.firma?'<div class="file-meta"><b>Firma HMAC:</b><br><code>'+esc(a.firma)+'</code></div>':"")+
+   (mot.length?'<div style="margin-top:7px">'+mot.map(m=>'<div class="'+(a.errores?.includes(m)?"er":"wa")+'">'+(a.errores?.includes(m)?"✖ ":"• ")+esc(m)+'</div>').join("")+'</div>':"")+
+   '<div class="file-meta" style="margin-top:8px"><b>Generado:</b> '+esc(a.fecha_generacion||"—")+' · <b>Intentado:</b> '+esc(hora)+'</div>'+
+   '<details style="margin-top:8px"><summary style="cursor:pointer">Ver fichero recibido</summary><pre class="file-content">'+esc(a.contenido||"")+'</pre></details>'+
+  '</div></details>';
+ }).join("");
+}
+document.getElementById("aud_filtro").onchange=listaAuditoria;
+document.getElementById("aud_refrescar").onclick=listaAuditoria;
+
 /* ---------- Importación (100% local) ---------- */
 async function importar(nombre,texto){
  const r=await validar(nombre,texto);
+ await registrarAuditoria(r,nombre,texto);
  if(r.reg && r.estado!=="er" && r.estado!=="du"){
   const cods=(await all("codigos")).filter(c=>String(c.comercial)===String(r.reg.comercial_num)&&c.fecha===r.reg.fecha);
   const m=cods.find(c=>c.estado!=="confirmado"&&[r.reg.codigo,r.reg.tel].includes(c.codigo));
