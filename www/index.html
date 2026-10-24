@@ -126,8 +126,6 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <section id="aju" class="hide"><div class="card"><b>Servidor (solo para la descarga de configuración)</b>
 <input id="a_url" placeholder="https://tu-dominio/licencias/api.php">
 <button class="b" id="a_save">Guardar</button></div>
-<div class="card"><b>Diagnóstico de comisiones</b><p class="mu">Muestra cómo trae el banco las comisiones (sin claves). Úsalo si el porciento sale en 0.</p>
-<button class="b" id="a_diag">Ver datos de comisión</button></div>
 <div class="card"><b>Cerrar sesión</b><button class="b" id="a_logout" style="background:var(--er)">Cerrar sesión y borrar todo</button></div>
 </section>
 </main>
@@ -789,20 +787,6 @@ document.getElementById("file_view_copy").onclick=async()=>{
  setTimeout(()=>b.textContent="Copiar",2000)};
 // Botón Atrás de Android: cierra el visor si está abierto; si no, sale de la app
 try{const A=window.Capacitor?.Plugins?.App;if(A?.addListener)A.addListener("backButton",()=>{if(visorAbierto())cerrarVisor();else A.exitApp()})}catch(e){}
-
-/* ---------- Diagnóstico de comisiones (sin datos secretos) ---------- */
-document.getElementById("a_diag").onclick=async()=>{
- const bd=await bundle(),sec=/clave|secret|pass|token|firma|key/i,rel=/com|porc|pago|limit|tipo|moneda/i;
- const limpia=(o,d=0)=>o&&typeof o==="object"&&d<4?(Array.isArray(o)?o.slice(0,5).map(x=>limpia(x,d+1)):Object.fromEntries(Object.entries(o).filter(([k])=>!sec.test(k)).map(([k,v])=>[k,limpia(v,d+1)]))):o;
- const out=bd?{claves_bundle:Object.fromEntries(Object.entries(bd).map(([k,v])=>[k,Array.isArray(v)?"lista("+v.length+")":typeof v])),
-  comision_tipo:(function f(o,d){return o&&typeof o==="object"&&d<7?(Array.isArray(o)?o.slice(0,30).map(x=>f(x,d+1)):Object.fromEntries(Object.entries(o).filter(([k])=>!sec.test(k)).map(([k,v])=>[k,f(v,d+1)]))):o})(bd.comision_tipo,0),
-  config:limpia(bd.config),
-  comerciales:(bd.comerciales||[]).filter(c=>c.activo!==false).slice(0,5).map(c=>Object.fromEntries(Object.entries(c).filter(([k])=>!sec.test(k)&&(rel.test(k)||k==="id"||k==="nombre")).map(([k,v])=>[k,limpia(v)]))),
-  sorteos_ejemplo:limpia((bd.sorteos||[]).slice(0,2))}:"Sin configuración descargada";
- document.getElementById("file_view_title").textContent="Diagnóstico de comisiones";
- document.getElementById("file_view_info").textContent="Copia este texto y envíalo para revisar";
- document.getElementById("file_view_content").textContent=typeof out==="string"?out:JSON.stringify(out,null,1);
- const fv=document.getElementById("file_view");fv.classList.remove("hide");fv.scrollTop=0;document.getElementById("file_view_copy").textContent="Copiar"};
 
 /* ---------- Ajustes ---------- */
 a_save.onclick=async()=>{await put("cfg",{k:"api_url",v:a_url.value.trim()||DEFAULT_API});alert("Guardado")};
