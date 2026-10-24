@@ -65,7 +65,7 @@ public class MainActivity extends BridgeActivity {
                 String nombre = nombreDeArchivo(uri);
                 String contenido = leerTexto(uri);
                 String js = "window.bancoImportar(" + JSONObject.quote(nombre) + "," + JSONObject.quote(contenido) + ")";
-                runOnUiThread(() -> webView.evaluateJavascript(js, null));
+                entregar(webView, js, 0);
             } catch (Exception e) {
                 // Un archivo ilegible o demasiado grande no debe tumbar la app;
                 // simplemente se ignora ese archivo y se sigue con los demás.
@@ -75,6 +75,18 @@ public class MainActivity extends BridgeActivity {
         // Limpia el intent para no reimportar el mismo archivo si el
         // usuario rota la pantalla o vuelve a esta actividad.
         setIntent(new Intent());
+    }
+
+    // Reintenta hasta que index.html haya cargado y window.bancoImportar exista
+    // (si no, el JS fallaba en silencio y el archivo se perdía).
+    private void entregar(WebView webView, String js, int intento) {
+        runOnUiThread(() -> webView.evaluateJavascript("typeof window.bancoImportar", v -> {
+            if (v != null && v.contains("function")) {
+                webView.evaluateJavascript(js, null);
+            } else if (intento < 100) {
+                webView.postDelayed(() -> entregar(webView, js, intento + 1), 300);
+            }
+        }));
     }
 
     private String nombreDeArchivo(Uri uri) {

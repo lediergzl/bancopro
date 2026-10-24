@@ -26,7 +26,7 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 .file-badge{display:inline-block;padding:3px 7px;border-radius:99px;background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac);font-size:11px;font-weight:700;white-space:nowrap}
 .file-item{padding:9px 12px;border-top:1px solid var(--bd)}.file-item-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .file-name{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.file-meta{margin-top:2px}.file-actions{display:flex;gap:6px;flex:0 0 auto}.file-actions button{width:auto;margin:0;padding:6px 8px}
+.file-meta{margin-top:2px}.file-actions{display:flex;gap:6px;flex:0 0 auto}.file-actions button{width:auto;margin:0;padding:10px 12px;min-height:42px}
 .file-content{white-space:pre-wrap;word-break:break-word;max-height:60vh;overflow:auto;background:var(--bg);border:1px solid var(--bd);border-radius:9px;padding:10px;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
 .faltantes-date{margin:0 0 12px}.faltantes-date-title{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;padding:2px 0 8px}.faltantes-date-count{font-size:12px;color:var(--mu);font-weight:500}.faltantes-com{border:1px solid var(--bd);border-radius:10px;margin:8px 0;overflow:hidden;background:var(--card)}.faltantes-com summary{list-style:none;cursor:pointer;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:650}.faltantes-com summary::-webkit-details-marker{display:none}.faltantes-com summary:before{content:"›";font-size:20px;line-height:12px;color:var(--mu);transition:transform .15s}.faltantes-com[open] summary:before{transform:rotate(90deg)}.faltantes-com-main{min-width:0;flex:1}.faltantes-com-name{display:block}.faltantes-com-meta{display:block;margin-top:2px}.faltantes-badge{display:inline-block;padding:3px 7px;border-radius:99px;background:color-mix(in srgb,var(--er) 12%,transparent);color:var(--er);font-size:11px;font-weight:700;white-space:nowrap}.faltantes-detail{padding:0 12px 10px}.faltantes-lot{padding:7px 0;border-top:1px solid var(--bd)}.faltantes-lot:first-child{border-top:0}.faltantes-lot-name{font-weight:600}.faltantes-sorteos{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}.faltantes-sorteo{padding:3px 7px;border:1px solid var(--bd);border-radius:7px;font-size:12px}.faltantes-codigo{margin-bottom:12px}.faltantes-empty{padding:8px 0}.faltantes-section-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 </style></head><body>
@@ -60,11 +60,11 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <p class="mu">Se muestran los 100 ficheros más recientes. Los históricos siguen guardados y se usan para el cuadre; abrir esta pantalla nunca recorre toda la tabla.</p>
 <div id="imp_list"></div></div>
 </section>
-<div id="file_view" class="card hide" style="position:fixed;z-index:20;left:10px;right:10px;top:10px;bottom:10px;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)">
-<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b id="file_view_title">Contenido del fichero</b>
-<button class="b" id="file_view_close" style="width:auto;margin:0">Cerrar</button></div>
+<div id="file_view" class="card hide" style="position:fixed;z-index:20;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top));bottom:calc(10px + env(safe-area-inset-bottom));overflow:auto;overscroll-behavior:contain;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:-12px;z-index:1;background:var(--card);padding:6px 0"><b id="file_view_title" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Contenido del fichero</b>
+<span style="display:flex;gap:6px;flex:0 0 auto"><button class="b" id="file_view_copy" style="width:auto;margin:0;padding:10px 14px">Copiar</button><button class="b" id="file_view_close" style="width:auto;margin:0;padding:10px 16px">Cerrar</button></span></div>
 <div id="file_view_info" class="mu" style="margin:8px 0"></div>
-<pre id="file_view_content" class="file-content"></pre></div>
+<pre id="file_view_content" class="file-content" style="max-height:none;font-size:13.5px;line-height:1.45"></pre></div>
 
 <section id="cod" class="hide"><div class="card"><b>Registrar código recibido</b>
 <p class="mu">El comercial te llama por teléfono y te dicta el código — no hace falta internet, ni de su parte ni de la tuya. Cuando más tarde descargues el archivo, se empareja solo, sin importar cuánto tiempo haya pasado.</p>
@@ -126,6 +126,8 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <section id="aju" class="hide"><div class="card"><b>Servidor (solo para la descarga de configuración)</b>
 <input id="a_url" placeholder="https://tu-dominio/licencias/api.php">
 <button class="b" id="a_save">Guardar</button></div>
+<div class="card"><b>Diagnóstico de comisiones</b><p class="mu">Muestra cómo trae el banco las comisiones (sin claves). Úsalo si el porciento sale en 0.</p>
+<button class="b" id="a_diag">Ver datos de comisión</button></div>
 <div class="card"><b>Cerrar sesión</b><button class="b" id="a_logout" style="background:var(--er)">Cerrar sesión y borrar todo</button></div>
 </section>
 </main>
@@ -173,6 +175,7 @@ async function rangoCodigoComercial(com,fecha){
  if(com==null||!fecha)return [];
  return cursorIndex("codigos","comercial_fecha",IDBKeyRange.only([+com,fecha]),Number.MAX_SAFE_INTEGER,"next");
 }
+const fechaLocal=(t=Date.now())=>{const d=new Date(t),p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())};
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>Number(n||0).toLocaleString("es",{minimumFractionDigits:2,maximumFractionDigits:2});
 const apiUrl=async()=>(await get("cfg","api_url"))?.v||DEFAULT_API;
@@ -227,9 +230,8 @@ function pagoEfectivo(bd,com,tipo,moneda){moneda=moneda||"cup";
  const b=bd?.config?.pagos?.[moneda]?.[tipo];const o=com?.pagos?.[moneda]?.[tipo];
  return (o!=null&&o>0)?o:(b!=null?b:{fijo:80,corrido:40,centena:500,parle:500}[tipo]||0)}
 function comisionEfectiva(bd,com,loteriaId){
- if(com?.porcentaje!=null)return com.porcentaje;
- const pl=com?.porcentaje_por_loteria?.[String(loteriaId)];if(pl!=null)return pl;
- return bd?.config?.porcentaje!=null?bd.config.porcentaje:0}
+ const n=v=>{const x=parseFloat(v);return isFinite(x)&&x>0?x:null}; // 0/vacío = "sin definir" (igual que pagoEfectivo)
+ return n(com?.porcentaje)??n(com?.porcentaje_por_loteria?.[String(loteriaId)])??n(bd?.config?.porcentaje)??0}
 function sorteoDe(bd,lot,sor){return sorteoPorClave(bd,lot,sor)}
 
 /* ---------- Validación de un .jgd (todo local, sin llamar al servidor) ---------- */
@@ -347,7 +349,9 @@ async function importar(nombre,texto){
  }
  await registrarAuditoria(r,nombre,texto);
  pintarRes(r);await refrescar();return r}
-window.bancoImportar=(n,t)=>{show("imp");return importar(n,t)};
+let _listoRes;const _listo=new Promise(r=>{_listoRes=r});let _cadena=Promise.resolve();
+// Espera a que la BD esté abierta y procesa los ficheros de uno en uno (evita carreras al compartir varios)
+window.bancoImportar=(n,t)=>{const p=_cadena.then(()=>_listo).then(()=>{show("imp");return importar(n,t)});_cadena=p.catch(()=>{});return p};
 function pintarRes(r){
  const c={ok:["ok","Válido"],wa:["wa","Válido con avisos"],er:["er","RECHAZADO"],du:["wa","Duplicado"]}[r.estado]||["er","Error"];
  const d=document.createElement("div");d.className="card";
@@ -480,15 +484,25 @@ async function listaArchivos(){
   document.getElementById("file_view_info").textContent=nombreCom(a.comercial_num||a.comercial)+" · "+(a.fecha||"—")+" · nonce "+(a.nonce||"—");
   let data=null;try{data=typeof a.contenido==="string"?JSON.parse(a.contenido):a.contenido}catch{}
   const p=data?.payload||{};const js=Array.isArray(p.jugadas)?p.jugadas:(Array.isArray(a.jug)?a.jug:[]);let txt="";
-  const fch=a.fecha?String(a.fecha).split("-").reverse().join("/"):"";if(fch)txt+="Fecha: "+fch+"\\n\\n";
-  for(const j of js){const nombre=j.jugador||j.nombre||j.cliente||"";const ds=Array.isArray(j.detalles)?j.detalles:[j];for(const d of ds){if(!d)continue;let tipo=String(d.tipo||j.tipo||"").toLowerCase();if(tipo.startsWith("candado")||tipo==="parle_global")tipo="parle";let ns=Array.isArray(d.combinaciones)&&d.combinaciones.length?d.combinaciones:(Array.isArray(d.numeros)?d.numeros:[]);if(!ns.length&&d.numero!=null)ns=[d.numero];const nums=ns.map(x=>String(x).trim()).filter(Boolean).join("x");const monto=d.monto_unitario!=null&&d.monto_unitario!==""?d.monto_unitario:(d.monto!=null?d.monto:d.monto_total);let linea=(nombre?nombre+": ":"")+(nums||"—")+(tipo?" "+tipo:"")+(monto!=null&&monto!==""?" con "+String(monto):"");txt+=linea+"\\n";}}
+  const f2=n=>Number(n||0).toFixed(2),sep="\u2500".repeat(30);
+  const sorD=(bd?.sorteos||[]).find(x=>String(x.id)===String(a.sorteo)&&String(x.loteria_id)===String(a.loteria))||(bd?.sorteos||[]).find(x=>String(x.id)===String(a.sorteo));
+  const sorTxt=[sorD?.nombre,sorD?.horario].filter(Boolean).join(" - ")||nombreSor(a.sorteo);
+  const totJ=j=>j.monto_total!=null?+j.monto_total:(Array.isArray(j.detalles)?j.detalles.reduce((t,d)=>t+(+d.monto||0),0):0);
+  const totalGen=js.reduce((t,j)=>t+totJ(j),0);
+  txt+=nombreLot(a.loteria)+"\n"+sorTxt+"\nFecha: "+(a.fecha||"")+"\n"+js.length+" jugadas | Total: $"+f2(totalGen)+"\n\n\u0F06\u0FD0\u0F35 \u0F06\u0FD0\u0F35 \u0F06\u0FD0\u0F35 \n\n";
+  for(const j of js){const nombre=j.jugador||j.nombre||j.cliente||"";const raw=String(j.raw||"").trim();
+   txt+=nombre+"\n";
+   if(raw)txt+=raw+"\n";
+   else for(const d of (Array.isArray(j.detalles)?j.detalles:[j])){if(!d)continue;const ns=Array.isArray(d.combinaciones)&&d.combinaciones.length?d.combinaciones:(Array.isArray(d.numeros)?d.numeros:[]);const m=d.monto_unitario!=null&&d.monto_unitario!==""?d.monto_unitario:d.monto;txt+=ns.map(x=>String(x).trim()).filter(Boolean).join("x")+(d.tipo?" "+d.tipo:"")+(m!=null&&m!==""?" con "+m:"")+"\n"}
+   txt+="TOTAL : "+f2(totJ(j))+"\n"+sep+"\n"}
+  txt+="TOTAL GENERAL: "+f2(totalGen);
   document.getElementById("file_view_content").textContent=txt.trim()||"No hay jugadas para mostrar.";
-  document.getElementById("file_view").classList.remove("hide");
+  const fv=document.getElementById("file_view");fv.classList.remove("hide");fv.scrollTop=0;document.getElementById("file_view_copy").textContent="Copiar";
  });
  box.querySelectorAll("[data-delete-file]").forEach(btn=>btn.onclick=async()=>{
   const a=await get("archivos",btn.dataset.deleteFile);if(!a)return;
   const nombre=a.nombre||a.nonce||"este fichero";
-  if(!confirm("¿Eliminar el fichero cargado \""+nombre+"\"?\\n\\nSe quitará de BancoPro y dejará de participar en el cuadre. El código registrado no se borra."))return;
+  if(!confirm("¿Eliminar el fichero cargado \""+nombre+"\"?\n\nSe quitará de BancoPro y dejará de participar en el cuadre. El código registrado no se borra."))return;
   await del("archivos",a.nonce);await refrescar();show("imp");
  });
 }
@@ -568,15 +582,15 @@ async function cuadre(){
  for(const l of Object.values(g)){
   l.sort((x,y)=>(conf.has(y.nonce)-conf.has(x.nonce))||String(y.generado).localeCompare(String(x.generado)));
   const a=l[0],com=bd?comercialPorId(bd,a.comercial_num):null,nombre=com?.nombre||a.comercial;
-  const p=(por[nombre]??={jug:0,mon:0,prem:0,sin:0,av:0,gan:[]});
-  p.jug+=a.jugadas;p.mon+=a.monto;if(a.estado==="wa"||l.length>1)p.av++;
+  const p=(por[nombre]??={jug:0,mon:0,com:0,prem:0,sin:0,av:0,gan:[]});
+  p.jug+=a.jugadas;p.mon+=a.monto;p.com+=a.monto*comisionEfectiva(bd,com,a.loteria)/100;if(a.estado==="wa"||l.length>1)p.av++;
   const r=res[[a.fecha,a.loteria,a.sorteo].join("|")];
   if(!r||!a.jug){p.sin++;continue}
   if(!bd){p.sin++;continue}
   const c=calcPremios(bd,com,a.loteria,a.sorteo,a.jug,r.numero,!!bd.config?.fijo_paga_como_corrido);p.prem+=c.total;p.gan.push(...c.gan)}
  const ks=Object.keys(por).sort(),T={jug:0,mon:0,com:0,prem:0};let det="";
  q_tab.innerHTML=ks.length?"<table><tr><th>Comercial</th><th class=r>Jugadas</th><th class=r>Venta</th><th class=r>Comisión</th><th class=r>Premios</th><th class=r>Saldo</th></tr>"+ks.map(k=>{
-  const p=por[k],com=(bd?.comerciales||[]).find(c=>c.nombre===k),pc=comisionEfectiva(bd,com,null),co=p.mon*pc/100,saldo=p.mon-co-p.prem;
+  const p=por[k],co=p.com,saldo=p.mon-co-p.prem;
   T.jug+=p.jug;T.mon+=p.mon;T.com+=co;T.prem+=p.prem;
   if(p.gan.length)det+=`<details><summary>${esc(k)}: ${p.gan.length} premios</summary><table>`+p.gan.sort((x,y)=>y.monto-x.monto).map(x=>`<tr><td>${esc(x.jugador)}</td><td>${esc(x.label)}</td><td class=r>${money(x.monto)}</td></tr>`).join("")+"</table></details>";
   return`<tr><td>${esc(k)}${p.av?' <span class="wa" title="Avisos o varias versiones">⚠</span>':""}${p.sin?` <span class="mu">(${p.sin} sin resultado)</span>`:""}</td><td class=r>${p.jug}</td><td class=r>${money(p.mon)}</td><td class=r>${money(co)}</td><td class=r>${money(p.prem)}</td><td class="r ${saldo>=0?"ok":"er"}"><b>${money(saldo)}</b></td></tr>`}).join("")+
@@ -620,7 +634,7 @@ async function pintarFaltantes(desde,hasta){
  if(!bd||!bd.comerciales?.length||!bd.sorteos?.length){
   q_faltan_nada.innerHTML=pen.length?"":'<p class="mu faltantes-empty">Nada pendiente.</p>';return
  }
- const hoy=new Date().toISOString().slice(0,10),ahora=Date.now();
+ const hoy=fechaLocal(),ahora=Date.now();
  const dias=_modoRango?diasEntre(desde,hasta):[fec].filter(Boolean);
  const arch=await porFecha("archivos","fecha",_modoRango?desde:fec,_modoRango?hasta:fec);
  const archivoSet=new Set(arch.filter(a=>a.estado!=="er").map(a=>[a.comercial_num,a.fecha,a.loteria,a.sorteo].join("|")));
@@ -760,6 +774,36 @@ async function pintarCuadreComercial(){
  await actualizarPreviaQc();
 }
 
+/* ---------- Visor de ficheros: cerrar ---------- */
+const cerrarVisor=()=>document.getElementById("file_view").classList.add("hide");
+document.getElementById("file_view_close").onclick=cerrarVisor;
+document.addEventListener("keydown",e=>{if(e.key==="Escape")cerrarVisor()});
+const visorAbierto=()=>!document.getElementById("file_view").classList.contains("hide");
+document.getElementById("file_view_copy").onclick=async()=>{
+ const b=document.getElementById("file_view_copy"),txt=document.getElementById("file_view_content").textContent;
+ try{
+  if(navigator.clipboard&&window.isSecureContext!==false){await navigator.clipboard.writeText(txt)}
+  else{const ta=document.createElement("textarea");ta.value=txt;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.focus();ta.select();const ok=document.execCommand("copy");document.body.removeChild(ta);if(!ok)throw 0}
+  b.textContent="Copiado ✔";
+ }catch{b.textContent="No se pudo"}
+ setTimeout(()=>b.textContent="Copiar",2000)};
+// Botón Atrás de Android: cierra el visor si está abierto; si no, sale de la app
+try{const A=window.Capacitor?.Plugins?.App;if(A?.addListener)A.addListener("backButton",()=>{if(visorAbierto())cerrarVisor();else A.exitApp()})}catch(e){}
+
+/* ---------- Diagnóstico de comisiones (sin datos secretos) ---------- */
+document.getElementById("a_diag").onclick=async()=>{
+ const bd=await bundle(),sec=/clave|secret|pass|token|firma|key/i,rel=/com|porc|pago|limit|tipo|moneda/i;
+ const limpia=(o,d=0)=>o&&typeof o==="object"&&d<4?(Array.isArray(o)?o.slice(0,5).map(x=>limpia(x,d+1)):Object.fromEntries(Object.entries(o).filter(([k])=>!sec.test(k)).map(([k,v])=>[k,limpia(v,d+1)]))):o;
+ const out=bd?{claves_bundle:Object.fromEntries(Object.entries(bd).map(([k,v])=>[k,Array.isArray(v)?"lista("+v.length+")":typeof v])),
+  comision_tipo:(function f(o,d){return o&&typeof o==="object"&&d<7?(Array.isArray(o)?o.slice(0,30).map(x=>f(x,d+1)):Object.fromEntries(Object.entries(o).filter(([k])=>!sec.test(k)).map(([k,v])=>[k,f(v,d+1)]))):o})(bd.comision_tipo,0),
+  config:limpia(bd.config),
+  comerciales:(bd.comerciales||[]).filter(c=>c.activo!==false).slice(0,5).map(c=>Object.fromEntries(Object.entries(c).filter(([k])=>!sec.test(k)&&(rel.test(k)||k==="id"||k==="nombre")).map(([k,v])=>[k,limpia(v)]))),
+  sorteos_ejemplo:limpia((bd.sorteos||[]).slice(0,2))}:"Sin configuración descargada";
+ document.getElementById("file_view_title").textContent="Diagnóstico de comisiones";
+ document.getElementById("file_view_info").textContent="Copia este texto y envíalo para revisar";
+ document.getElementById("file_view_content").textContent=typeof out==="string"?out:JSON.stringify(out,null,1);
+ const fv=document.getElementById("file_view");fv.classList.remove("hide");fv.scrollTop=0;document.getElementById("file_view_copy").textContent="Copiar"};
+
 /* ---------- Ajustes ---------- */
 a_save.onclick=async()=>{await put("cfg",{k:"api_url",v:a_url.value.trim()||DEFAULT_API});alert("Guardado")};
 
@@ -785,9 +829,10 @@ async function refrescar(){
 }
 openDB().then(async()=>{
  a_url.value=await apiUrl();
- c_fec.value=q_fec.value=r_fec.value=new Date().toISOString().slice(0,10);
- const hace7=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+ c_fec.value=q_fec.value=r_fec.value=fechaLocal();
+ const hace7=fechaLocal(Date.now()-7*86400000);
  q_desde.value=hace7;q_hasta.value=q_fec.value;
  await refrescar();
+ _listoRes();
 });
 </script></body></html>
