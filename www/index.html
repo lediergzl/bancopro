@@ -126,7 +126,7 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <section id="aju" class="hide"><div class="card"><b>Servidor (solo para la descarga de configuración)</b>
 <input id="a_url" placeholder="https://tu-dominio/licencias/api.php">
 <button class="b" id="a_save">Guardar</button></div>
-<div class="card"><b>Cerrar sesión</b><button class="b" id="a_logout" style="background:var(--er)">Cerrar sesión y borrar todo</button></div>
+<div class="card"><b>Cerrar sesión</b><button class="b" id="a_logout" style="background:var(--er)">Cerrar sesión</button></div>
 </section>
 </main>
 <script>
@@ -149,7 +149,7 @@ const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("bancopro",7);
  r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)});
 const tx=(s,m="readonly")=>DB.transaction(s,m).objectStore(s);
 const rq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
-const all=s=>rq(tx(s).getAll()),get=(s,k)=>rq(tx(s).get(k)),put=(s,v)=>rq(tx(s,"readwrite").put(v)),del=(s,k)=>rq(tx(s,"readwrite").delete(k));
+const get=(s,k)=>rq(tx(s).get(k)),put=(s,v)=>rq(tx(s,"readwrite").put(v)),del=(s,k)=>rq(tx(s,"readwrite").delete(k));
 function countIndex(store,index,range=null){return new Promise((resolve,reject)=>{const t=DB.transaction(store,"readonly"),s=t.objectStore(store),req=s.index(index).count(range);req.onsuccess=()=>resolve(req.result||0);req.onerror=()=>reject(req.error)})}
 function cursorIndex(store,index,range,limit=100,dir="prev"){
  const db=DB;return new Promise((resolve,reject)=>{const t=db.transaction(store,"readonly"),s=t.objectStore(store),idx=s.index(index),out=[];
@@ -250,7 +250,7 @@ async function validar(nombre,texto){
  if(p.resumen&&(p.resumen.total_jugadas!==p.jugadas.length||Math.abs(p.resumen.monto_total-suma)>0.005)){out.estado="er";out.errores.push("El resumen no coincide con las jugadas")}
 
  if(!bd){out.avisos.push("No has descargado la configuración: no se puede verificar la firma ni calcular premios todavía");if(out.estado==="ok")out.estado="wa"}
- else if(!com){out.estado="er";out.errores.push("Comercial "+esc(h.comercial_id)+" no existe en la configuración descargada")}
+ else if(!com){out.estado="er";out.errores.push("Comercial "+h.comercial_id+" no existe en la configuración descargada")}
  else if(!com.clave_secreta){out.avisos.push("Este comercial no tiene clave configurada en el banco");if(out.estado==="ok")out.estado="wa"}
  else{try{
   const key=await crypto.subtle.importKey("raw",b64b(com.clave_secreta),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
@@ -516,6 +516,8 @@ async function listaCodigos(){
 r_num.oninput=()=>{const r=r_num.value.replace(/\s/g,"");r_hint.textContent=/^\d{3,}$/.test(r)?`centena ${r.slice(0,3)} · fijo ${r.slice(1,3)}`+(r.length>=5?` · corrido1 ${r.slice(3,5)}`:"")+(r.length>=7?` · corrido2 ${r.slice(5,7)}`:""):""};
 r_add.onclick=async()=>{const num=r_num.value.replace(/\s/g,""),f=r_fec.value,l=r_lot.value,so=r_sor.value;
  if(!f||!l||!so||!/^\d{7}$/.test(num)&&!(/^\d{3}$|^\d{5}$/.test(num)&&confirm("El número no tiene 7 dígitos. ¿Guardar así?")))return alert("Completa fecha, lotería, sorteo y un número ganador válido.");
+ const key=[f,l,so].join("|"),ex=await get("resultados",key);
+ if(ex&&ex.numero!==num&&!confirm("Ya hay un resultado guardado para esa fecha, lotería y sorteo: "+ex.numero+".\n¿Reemplazarlo por "+num+"?"))return;
  await put("resultados",{key:[f,l,so].join("|"),fecha:f,loteria:l,sorteo:so,numero:num,registrado:new Date().toISOString()});r_num.value="";r_hint.textContent="";refrescar()};
 async function listaResultados(){
  const rs=await recientes("resultados","fecha",100);
@@ -568,7 +570,6 @@ function calcPremios(bd,com,loteriaId,sorteoId,jugadas,num,fijoComoCorrido){
 
 /* ---------- Cuadre (100% local) ---------- */
 let _modoRango=false;
-function enRango(fecha,desde,hasta){if(desde&&fecha<desde)return false;if(hasta&&fecha>hasta)return false;return true}
 async function cuadre(){
  const fec=q_fec.value,desde=q_desde.value,hasta=q_hasta.value,bd=await bundle();
  const res=Object.fromEntries((await porFecha("resultados","fecha",_modoRango?desde:fec,_modoRango?hasta:fec)).map(r=>[r.key,r]));
