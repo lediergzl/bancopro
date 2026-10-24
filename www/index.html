@@ -126,6 +126,9 @@ button.b{background:var(--ac);color:#fff;border:0;font-weight:600}.mu{color:var(
 <section id="aju" class="hide"><div class="card"><b>Servidor (solo para la descarga de configuración)</b>
 <input id="a_url" placeholder="https://tu-dominio/licencias/api.php">
 <button class="b" id="a_save">Guardar</button></div>
+<div class="card"><b>Respaldo de datos</b><p class="mu">Guarda ficheros, códigos, resultados y auditoría (no incluye claves ni la sesión). Hazlo de vez en cuando: los datos viven solo en este teléfono.</p>
+<button class="b" id="a_exp">Exportar respaldo</button>
+<input type="file" id="a_imp" accept=".json,application/json"><div id="a_bk_msg" class="mu"></div></div>
 <div class="card"><b>Cerrar sesión</b><button class="b" id="a_logout" style="background:var(--er)">Cerrar sesión</button></div>
 </section>
 </main>
@@ -788,6 +791,35 @@ document.getElementById("file_view_copy").onclick=async()=>{
  setTimeout(()=>b.textContent="Copiar",2000)};
 // Botón Atrás de Android: cierra el visor si está abierto; si no, sale de la app
 try{const A=window.Capacitor?.Plugins?.App;if(A?.addListener)A.addListener("backButton",()=>{if(visorAbierto())cerrarVisor();else A.exitApp()})}catch(e){}
+
+/* ---------- Respaldo de datos ---------- */
+const BK_STORES=["archivos","codigos","resultados","auditoria"];
+async function exportarRespaldo(){
+ const m=document.getElementById("a_bk_msg"),d={app:"bancopro",version:1,fecha:new Date().toISOString()};
+ for(const st of BK_STORES)d[st]=await rq(tx(st).getAll());
+ const txt=JSON.stringify(d),name="bancopro-respaldo-"+fechaLocal()+".json",resumen=BK_STORES.map(st=>st+": "+d[st].length).join(" · ");
+ try{const f=new File([txt],name,{type:"application/json"});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});m.textContent="Respaldo compartido ("+resumen+")";return}
+ }catch(e){if(e&&e.name==="AbortError")return}
+ try{await navigator.clipboard.writeText(txt);m.textContent="No se pudo compartir como archivo; el respaldo se copió al portapapeles ("+resumen+"). Pégalo en una nota o chat para guardarlo."}
+ catch{m.textContent="No se pudo exportar en este teléfono."}}
+async function importarRespaldo(texto){
+ let d;try{d=JSON.parse(texto)}catch{return "El archivo no es un JSON válido."}
+ if(!d||d.app!=="bancopro"||!BK_STORES.every(st=>Array.isArray(d[st])))return "No es un respaldo de BancoPro.";
+ if(!confirm("Se añadirán al teléfono los datos que falten:\n"+BK_STORES.map(st=>st+": "+d[st].length).join("\n")+"\n\nLo que ya existe no se modifica. ¿Continuar?"))return "Importación cancelada.";
+ const n={};
+ for(const st of BK_STORES){n[st]=0;
+  const keyOf={archivos:r=>r.nonce,resultados:r=>r.key,auditoria:r=>r.id}[st];
+  if(keyOf){for(const r of d[st]){const k=keyOf(r);if(k==null)continue;if(await get(st,k))continue;await put(st,r);n[st]++}}
+  else{const ex=await rq(tx(st).getAll()),sig=c=>[c.comercial,c.fecha,c.codigo].join("|"),vistos=new Set(ex.map(sig));
+   for(const r of d[st]){if(vistos.has(sig(r)))continue;const c={...r};delete c.id;await put(st,c);vistos.add(sig(r));n[st]++}}}
+ await refrescar();
+ return "Respaldo importado — añadidos: "+BK_STORES.map(st=>st+" "+n[st]).join(" · ")}
+document.getElementById("a_exp").onclick=exportarRespaldo;
+document.getElementById("a_imp").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+ const m=document.getElementById("a_bk_msg");m.textContent="Importando...";
+ try{m.textContent=await importarRespaldo(await f.text())}catch(err){m.textContent="Error al importar: "+err}
+ e.target.value=""};
 
 /* ---------- Ajustes ---------- */
 a_save.onclick=async()=>{await put("cfg",{k:"api_url",v:a_url.value.trim()||DEFAULT_API});alert("Guardado")};
